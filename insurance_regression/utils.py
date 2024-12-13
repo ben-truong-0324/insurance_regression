@@ -15,6 +15,8 @@ import insurance_regression.hypotheses
 from src.models import *
 from src.models_reg import *
 from insurance_regression.config import *
+import insurance_regression.plots as plots
+
 import joblib
 
 import math
