@@ -1,0 +1,21 @@
+name: ml_general  # Name your environment
+channels:
+  - pytorch
+  - nvidia
+  - defaults
+dependencies:
+  - pytorch
+  # - pytorch-cuda=12.4
+  - nose
+  - numpy
+  - pandas
+  - seaborn
+  - tabulate
+  - matplotlib
+  - scikit-learn
+  
+  - pip  # Ensure pip is available for installing pip packages
+  - pip:
+  - xgboost
+    # - scikit-learn 
+    # - bayesian-optimization
