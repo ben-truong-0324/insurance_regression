@@ -397,8 +397,23 @@ def train_nn_early_stop_regression(X_train, y_train, X_test, y_test, device,para
     rmse = np.sqrt(mse)
     rmlse = np.sqrt(mean_squared_error(np.log1p(y_test), np.log1p(outputs)))
     r2 = r2_score(y_test, outputs)
-    return mse, mae, rmse, r2,rmlse, runtime, model, epoch_losses
+    return mse, mae, rmse, r2,rmlse, runtime, model, epoch_losses, outputs
 
+def do_plot_preds_of_fold(y_test, y_pred, model_name, fold):
+    if len(y_test) > 10000:
+        random_indices = np.random.choice(len(y_test), 10000, replace=False)
+        try:
+            y_test_subset = pd.Series(y_test).iloc[random_indices]
+            y_pred_subset = pd.Series(y_pred).iloc[random_indices]
+        except Exception as e:
+            print("Type of y_test:", type(y_test))
+            print("Type of y_pred:", type(y_pred))
+            print(e)
+        plots.plot_predictions( y_test_subset, y_pred_subset,fold, model_name,
+                f"{AGGREGATED_OUTDIR}/{model_name}_{fold}_ypreds_first10k.png")
+    else:
+        plots.plot_predictions( y_test, y_pred,fold, model_name,
+                f"{AGGREGATED_OUTDIR}/{model_name}_{fold}_ypreds.png")
 
 def save_model_log_results(best_cv_perfs, best_params,best_eval_func,best_models_ensemble, model_name):
     print(f"Best Hyperparameters: {best_params}")
@@ -433,9 +448,10 @@ def reg_hyperparameter_tuning(X,y, device, model_name, do_cv=0):
     # Define hyperparameter grid
     param_grid = {
         'hidden_dim': [
-                    #    512, 1024,
+                       512, 
+                    # 1024,
             # 512, 1024, 2048,
-                       10000,
+                    #    10000,
                     #    20000
                        ],
         'dropout_rate': [
@@ -469,8 +485,7 @@ def reg_hyperparameter_tuning(X,y, device, model_name, do_cv=0):
                         'weight_decay': weight_decay,
                         'lr': lr
                     }
-                    # criterion = nn.MSELoss(reduction='mean')
-                    criterion = RMSLELoss()
+                    criterion = nn.MSELoss(reduction='mean')
                     ############################# for kfold implemntation
                     avg_metrics_per_cv = {
                         "MSE": [],
@@ -486,7 +501,7 @@ def reg_hyperparameter_tuning(X,y, device, model_name, do_cv=0):
                         print(f"Starting fold {fold_idx + 1}")
                         X_train, X_val = X[train_idx], X[val_idx]
                         y_train, y_val = y[train_idx], y[val_idx]
-                        mse, mae, rmse, r2,rmlse, runtime, model, epoch_losses = train_nn_early_stop_regression(
+                        mse, mae, rmse, r2,rmlse, runtime, model, epoch_losses, outputs = train_nn_early_stop_regression(
                                             X_train, y_train, X_val, y_val, 
                                             device, params_dict, criterion, model_name)
                         avg_metrics_per_cv["MSE"].append(mse)
@@ -495,8 +510,14 @@ def reg_hyperparameter_tuning(X,y, device, model_name, do_cv=0):
                         avg_metrics_per_cv["R2"].append(r2)
                         avg_metrics_per_cv["RMLSE"].append(rmlse)
                         avg_metrics_per_cv["runtime"].append(runtime)
+                        #####
                         cv_losses.append(epoch_losses)
                         fold_models.append(model)
+                        ######
+                        do_plot_preds_of_fold(y_val, outputs, model_name, fold_idx)
+                        plots.plot_epoch_losses(epoch_losses, f"{AGGREGATED_OUTDIR}/cv_losses_{model_name}_fold_{fold_idx}.png")
+                        
+
                     #once get the average of all folds
                     for metric, values in avg_metrics_per_cv.items():
                         avg_metrics_per_cv[metric] = np.mean(values)

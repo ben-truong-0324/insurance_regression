@@ -346,6 +346,16 @@ def evaluate_metrics_in_context(y_true, y_pred, model_name, file_path=f"{TXT_OUT
     mse = mean_squared_error(y_true, y_pred)
     mae = mean_absolute_error(y_true, y_pred)
     r2 = r2_score(y_true, y_pred)
+    if np.any(np.isnan(y_true)):
+        print("Warning: NaN values found in y_true")
+    if np.any(np.isnan(y_pred)):
+        print("Warning: NaN values found in y_pred")
+    if np.any(y_true < 0) or np.any(y_pred < 0):
+        raise ValueError("RMSLE cannot be calculated for negative values in y_true or y_pred.")
+    if np.isnan(y_true).any() or np.isnan(y_pred).any():
+        raise ValueError("RMSLE cannot be calculated because y_true or y_pred contains NaN values.")
+    
+    rmlse = np.sqrt(mean_squared_error(np.log1p(y_true), np.log1p(y_pred)))
     
     # Calculate average price for relative error calculations
     avg_price = np.mean(y_true)
@@ -356,6 +366,7 @@ def evaluate_metrics_in_context(y_true, y_pred, model_name, file_path=f"{TXT_OUT
     
     # Print results in context
     print(f"Mean Squared Error (MSE): {mse}")
+    print(f"RMLSE: {rmlse}")
     print(f"Mean Absolute Error (MAE): {mae}")
     print(f"R² Score: {r2}")
     print(f"Relative MSE (% of avg price): {relative_mse:.2f}%")
@@ -365,6 +376,7 @@ def evaluate_metrics_in_context(y_true, y_pred, model_name, file_path=f"{TXT_OUT
     with open(file_path, "a") as log_file:
         log_file.write(f"\nFor model {model_name}:\n")
         log_file.write(f"Mean Squared Error (MSE): {mse}\n")
+        log_file.write(f"RMLSE: {rmlse}\n")
         log_file.write(f"Mean Absolute Error (MAE): {mae}\n")
         log_file.write(f"R² Score: {r2}\n")
         log_file.write(f"Relative MSE (% of avg price): {relative_mse:.2f}%\n")
@@ -378,11 +390,10 @@ def train_and_evaluate_dt(X_train, y_train, X_test, y_test):
     # Initialize models
     dt = DecisionTreeRegressor(random_state=GT_ID)
     bagging = BaggingRegressor(estimator =dt, n_estimators=N_ESTIMATOR, random_state=GT_ID)
-    boosting = GradientBoostingRegressor(n_estimators=N_ESTIMATOR, learning_rate=0.1, random_state=GT_ID)
-    xgboost_model = xgb.XGBRegressor(objective="reg:squarederror", random_state=GT_ID)
+    boosting = GradientBoostingRegressor(n_estimators=N_ESTIMATOR, learning_rate=0.001, random_state=GT_ID)
     if any(X_train.dtypes == 'category'):
-        xgboost_model = xgb.XGBRegressor(objective="reg:squarederror",random_state=GT_ID,enable_categorical=True)
-    else: xgboost_model = xgb.XGBRegressor(objective="reg:squarederror",random_state=GT_ID)
+        xgboost_model = xgb.XGBRegressor(objective="reg:squarederror",random_state=GT_ID,enable_categorical=True,reg_alpha=0.1, )
+    else: xgboost_model = xgb.XGBRegressor(objective="reg:squarederror",random_state=GT_ID, )
     rf = RandomForestRegressor(n_estimators=N_ESTIMATOR, random_state=GT_ID)
     extra_trees = ExtraTreesRegressor(n_estimators=N_ESTIMATOR, random_state=GT_ID)
     hist_gb = HistGradientBoostingRegressor(max_iter=N_ESTIMATOR, random_state=GT_ID)
@@ -409,12 +420,34 @@ def train_and_evaluate_dt(X_train, y_train, X_test, y_test):
         start_time = time.time()
         model.fit(X_train, y_train)
         y_pred = model.predict(X_test)
+        y_pred = np.abs(y_pred)
+
         evaluate_metrics_in_context(y_test, y_pred, model_name)
-        if len(y_test) <= 1000: # Only plot if y_test has 1000 or fewer values
-            plots.plot_predictions_vs_actuals( y_test, y_pred, model_name,
-                                 f"{AGGREGATED_OUTDIR}/pred_actual_diff_{model_name}.png")
-        else: print(f"Skipping plot for {model_name} as y_test has more than 1000 values.")
+        if len(y_test) > 10000:
+            random_indices = np.random.choice(len(y_test), 10000, replace=False)
+            try:
+                y_test_subset = pd.Series(y_test).iloc[random_indices]
+                y_pred_subset = pd.Series(y_pred).iloc[random_indices]
+            except Exception as e:
+                print("Type of y_test:", type(y_test))
+                print("Type of y_pred:", type(y_pred))
+                print(e)
+            # plots.plot_predictions_vs_actuals(y_test_subset, y_pred_subset, model_name,
+            #                                 f"{AGGREGATED_OUTDIR}/pred_actual_diff_{model_name}_first10k.png")
+            plots.plot_predictions( y_test_subset, y_pred_subset,1, model_name,
+                    f"{AGGREGATED_OUTDIR}/pred_actual_diff_{model_name}_first10k.png")
+        else:
+            # plots.plot_predictions_vs_actuals(y_test, y_pred, model_name,
+            #                                 f"{AGGREGATED_OUTDIR}/pred_actual_diff_{model_name}.png")
+            plots.plot_predictions( y_test, y_pred,1, model_name,
+                    f"{AGGREGATED_OUTDIR}/pred_actual_diff_{model_name}.png")
+
         # Calculate losses
+        if np.any(np.isnan(y_test)):
+            print("Warning: NaN values found in y_test")
+        if np.any(np.isnan(y_pred)):
+            print("Warning: NaN values found in y_pred")
+
         mse = mean_squared_error(y_test, y_pred)
         mae = mean_absolute_error(y_test, y_pred)
         r2 = r2_score(y_test, y_pred)
@@ -563,8 +596,8 @@ def get_solutions(X_train):
 def main(): 
     np.random.seed(GT_ID)
   
-    do_skl_train = 1
-    do_torch_train = 0
+    do_skl_train = 0
+    do_torch_train = 1
     start_time = time.time()
     X,y,X_train, X_test, y_train, y_test  = check_etl()
     check_data_info(X, y, X_train, X_test, y_train, y_test, show = False)
@@ -572,20 +605,20 @@ def main():
 
     ###### Sklearn models (just DT for now)
     if do_skl_train:
-        dt_result_save_file = f"{Y_PRED_OUTDIR}/dt_results.pkl"
-        if not os.path.exists(dt_result_save_file) or os.path.exists(dt_result_save_file):
-            results = train_and_evaluate_dt(X_train, y_train, X_test, y_test)
-            save_results(results, f"{Y_PRED_OUTDIR}/dt_results.pkl")
+        # dt_result_save_file = f"{Y_PRED_OUTDIR}/dt_results.pkl"
+        # if not os.path.exists(dt_result_save_file) or os.path.exists(dt_result_save_file):
+        results = train_and_evaluate_dt(X_train, y_train, X_test, y_test)
+            # save_results(results, f"{Y_PRED_OUTDIR}/dt_results.pkl")
         
     ####### Torch models (just MPL for now)
     if do_torch_train:
-        mpl_result_save_file = f"{Y_PRED_OUTDIR}/mpl_results.pkl"
-        if not os.path.exists(mpl_result_save_file) or os.path.exists(mpl_result_save_file):
-            results = train_and_evaluate_mpl(X,y)
-            save_results(results, f"{Y_PRED_OUTDIR}/mpl_results.pkl")
+        # mpl_result_save_file = f"{Y_PRED_OUTDIR}/mpl_results.pkl"
+        # if not os.path.exists(mpl_result_save_file) or os.path.exists(mpl_result_save_file):
+        results = train_and_evaluate_mpl(X,y)
+            # save_results(results, f"{Y_PRED_OUTDIR}/mpl_results.pkl")
         
     ######## done training, now inference and derive solutions.csv
-    # get_solutions(X_train)
+    get_solutions(X_train)
     
 
 if __name__ == "__main__":

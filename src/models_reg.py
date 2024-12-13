@@ -121,17 +121,3 @@ class SalienceNNRegression(nn.Module):
         x = self.relu(self.fc1(combined_input))
         x = self.fc2(x)
         return x
-
-class RMSLELoss(nn.Module):
-    def __init__(self):
-        super(RMSLELoss, self).__init__()
-
-    def forward(self, y_pred, y_true):
-        # Ensure no negative or zero values
-        y_pred = torch.clamp(y_pred, min=1e-9)
-        y_true = torch.clamp(y_true, min=1e-9)
-        
-        # Compute RMSLE
-        log_diff = torch.log1p(y_pred) - torch.log1p(y_true)
-        rmsle = torch.sqrt(torch.mean(log_diff ** 2))
-        return rmsle

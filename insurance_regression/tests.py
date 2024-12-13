@@ -27,6 +27,77 @@ def infer_column_type(series):
     elif pd.api.types.is_object_dtype(series):
         return 'Categorical'
     return 'Unknown'
+def process_target_column(y):
+    """
+    Processes the target column(s) and provides a summary based on whether `y` is for classification or regression.
+    
+    Parameters:
+        y: pd.Series or pd.DataFrame
+            The target variable(s) to process.
+    
+    Returns:
+        List of column information, with details on type, shape, unique values (for classification), 
+        and descriptive statistics (for regression).
+    """
+    column_info_y = []
+    imbalance_recommendation = (
+        "Consider checking for class imbalance if more than 10% of classes are underrepresented."
+    )
+    
+    if isinstance(y, pd.Series):
+        dtype = y.dtype
+        shape = len(y)
+        
+        # Handle classification or regression based on dtype
+        if pd.api.types.is_numeric_dtype(dtype) and y.nunique() > 20:  # Likely regression
+            mean_val = y.mean()
+            std_val = y.std()
+            min_val = y.min()
+            max_val = y.max()
+            recommendation = "Likely regression target. Ensure proper scaling if necessary."
+            column_info_y.append([
+                y.name if y.name else "Target Column", dtype, shape, 
+                f"Mean: {mean_val:.2f}, Std: {std_val:.2f}, Min: {min_val}, Max: {max_val}",
+                recommendation
+            ])
+        else:  # Likely classification
+            unique_values = y.unique().tolist()
+            len_unique_values = len(unique_values)
+            example_values = unique_values[:5]
+            recommendation = imbalance_recommendation
+            column_info_y.append([
+                y.name if y.name else "Target Column", dtype, shape, 
+                len_unique_values, example_values, recommendation
+            ])
+    
+    elif isinstance(y, pd.DataFrame):
+        for col in y.columns:
+            dtype = y[col].dtype
+            shape = len(y[col])
+            
+            # Handle classification or regression for each column
+            if pd.api.types.is_numeric_dtype(dtype) and y[col].nunique() > 20:  # Likely regression
+                mean_val = y[col].mean()
+                std_val = y[col].std()
+                min_val = y[col].min()
+                max_val = y[col].max()
+                recommendation = "Likely regression y."
+                column_info_y.append([
+                    col, dtype, shape, 
+                    f"Mean: {mean_val:.2f}, Std: {std_val:.2f}, Min: {min_val}, Max: {max_val}",
+                    recommendation
+                ])
+            else:  # Likely classification
+                unique_values = y[col].unique().tolist()
+                len_unique_values = len(unique_values)
+                example_values = unique_values[:5]
+                recommendation = imbalance_recommendation
+                column_info_y.append([
+                    col, dtype, shape, 
+                    len_unique_values, example_values, recommendation
+                ])
+    
+    return column_info_y
 
 def get_column_info(X, y):
     try:
@@ -46,15 +117,8 @@ def get_column_info(X, y):
             imbalance_recommendation = f"{imbalanced_classes} Class imbalance detected."
         else:
             imbalance_recommendation = f"{imbalanced_classes} No significant class imbalance detected."
-        if isinstance(y, pd.Series):
-            dtype = y.dtype
-            shape = len(y)
-            unique_values = y.unique().tolist()
-            len_unique_values = len(unique_values)
-            example_values = unique_values[:5]
-            recommendation = imbalance_recommendation  # Class imbalance recommendation
-            column_info_y.append([y.name if y.name else "Target Column", dtype, shape, len_unique_values, example_values, recommendation])
-
+        column_info_y = process_target_column(y)
+        
 
         # Numerical features analysis for X
         numerical_features = X.select_dtypes(include=['int64', 'float64'])
@@ -138,8 +202,7 @@ def get_column_info(X, y):
         print(e)
 
 
-def test_data_etl_input_check(X,y,X_train, X_test, y_train, y_test, 
-                        show = False):
+def test_data_etl_input_check(X,y,X_train, X_test, y_train, y_test, show = False):
     if show:
         try:
             data_info = [

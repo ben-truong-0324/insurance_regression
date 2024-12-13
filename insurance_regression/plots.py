@@ -1567,13 +1567,13 @@ def plot_predictions_vs_actuals(y_test, y_pred, model_name, save_path):
         
         plt.tight_layout()
         plt.savefig(save_path)
-        plt.show()
+        # plt.show()
         
         plt.close()
 
 
 
-def plot_predictions(y_val, outputs, fold_idx, model_name):
+def plot_predictions(y_val, outputs, fold_idx, model_name,save_path):
     """
     Plot true values (y_val) vs predicted values (outputs) for the current fold.
 
@@ -1612,6 +1612,31 @@ def plot_predictions(y_val, outputs, fold_idx, model_name):
     plt.xlim(min_val, max_val)
     plt.ylim(min_val, max_val)
     
+    # plt.show()
+    plt.savefig(save_path)
+    plt.close()
+
+import matplotlib.pyplot as plt
+
+def plot_epoch_losses(epoch_losses, save_path):
+    epochs = [entry["epoch"] for entry in epoch_losses]
+    train_losses = [entry["train_loss"] for entry in epoch_losses]
+    eval_losses = [entry["eval_loss"] for entry in epoch_losses]
+
+    # Create a plot
+    plt.figure(figsize=(10, 6))
     
-    # Show the plot
-    plt.show()
+    # Plot training and evaluation losses
+    plt.plot(epochs, train_losses, label='Train Loss', color='blue', linestyle='-', marker='o')
+    plt.plot(epochs, eval_losses, label='Eval Loss', color='red', linestyle='-', marker='x')
+    
+    # Add labels and title
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.title('Training and Evaluation Losses per Epoch')
+    plt.legend()
+    
+    # Save the plot to the specified path
+    plt.savefig(save_path)
+    plt.close()  # Close the plot to release memory
+    print(f"Loss plot saved at: {save_path}")
