@@ -8,9 +8,9 @@ from tabulate import tabulate
 
 from sklearn.datasets import make_blobs
 
-import rohlik_sales.ml
+import insurance_regression.ml
 
-from rohlik_sales.config import *
+from insurance_regression.config import *
 
 
 import pandas as pd

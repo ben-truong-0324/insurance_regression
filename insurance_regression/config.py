@@ -3,26 +3,27 @@ import socket
 # Determine the hostname
 hostname = socket.gethostname()
 if hostname == "Khais-MacBook-Pro.local" or hostname == "Khais-MBP.attlocal.net":  
-    from rohlik_sales.config_mac import *  
+    from insurance_regression.config_mac import *  
 else:
-    from rohlik_sales.config_cuda import * 
+    from insurance_regression.config_cuda import * 
 
 import os
 
 
-CALENDAR_PATH = os.path.join(os.getcwd(), 'data', 'calendar.csv')
-INVENTORY_PATH = os.path.join(os.getcwd(), 'data', 'inventory.csv')
-TRAIN_PATH = os.path.join(os.getcwd(), 'data', 'sales_train.csv')
-PROCESSED_TRAIN_PATH = os.path.join(os.getcwd(), 'data', 'sales_train_processed.csv')
+# CALENDAR_PATH = os.path.join(os.getcwd(), 'data', 'calendar.csv')
+# INVENTORY_PATH = os.path.join(os.getcwd(), 'data', 'inventory.csv')
+TRAIN_PATH = os.path.join(os.getcwd(), 'data', 'train.csv')
+PROCESSED_TRAIN_PATH = os.path.join(os.getcwd(), 'data', 'train_processed.csv')
 
-TEST_PATH = os.path.join(os.getcwd(), 'data', 'sales_test.csv')
-PROCESSED_TEST_PATH = os.path.join(os.getcwd(), 'data', 'sales_test_processed.csv')
+TEST_PATH = os.path.join(os.getcwd(), 'data', 'test.csv')
+PROCESSED_TEST_PATH = os.path.join(os.getcwd(), 'data', 'test_processed.csv')
 
 
 
-DATASET_SELECTION = "kaggle_rohlik_sales" #kaggle_housing #kaggle_housing_test
+DATASET_SELECTION = "kaggle_insurance_regression" #kaggle_housing #kaggle_housing_test
 
-EVAL_FUNC_METRIC = 'mae'  #rmse #'f1' # 'accuracy' 
+EVAL_FUNC_METRIC = 'rmlse' #'mae'  #rmse #'f1' # 'accuracy' 
+N_ESTIMATOR = 16
 
 EVAL_MODELS = [
                 # 'default',

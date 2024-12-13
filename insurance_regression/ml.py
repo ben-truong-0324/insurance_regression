@@ -1,11 +1,11 @@
-from rohlik_sales.config import *
+from insurance_regression.config import *
 from src.models import *
-from rohlik_sales.utils import *
-from rohlik_sales.tests import *
+from insurance_regression.utils import *
+from insurance_regression.tests import *
 
-import rohlik_sales.etl as etl
-import rohlik_sales.plots as plots
-import rohlik_sales.hypotheses as hypotheses
+import insurance_regression.etl as etl
+import insurance_regression.plots as plots
+import insurance_regression.hypotheses as hypotheses
 
 import pickle
 import glob
@@ -229,50 +229,6 @@ def get_eval_reg_with_nn(X,y,nn_performance_path,cv_losses_outpath, y_pred_outpa
 
                 best_cv_perfs, best_params,best_eval_func, best_models_ensemble = reg_hyperparameter_tuning(X_train, y_train, X_val, y_val, device, model_name)
 
-                
-               
-
-    #             # Log epoch losses and predictions
-    #             cv_losses.append(epoch_losses)
-    #             y_preds.append({"y_true": y_val.tolist(), "y_pred": outputs.tolist()})
-    #         # Calculate average metrics across folds
-    #         nn_results[model_name] = {
-    #             "avg_mse": np.mean(avg_metrics_per_cv["mse"]),
-    #             "avg_mae": np.mean(avg_metrics_per_cv["mae"]),
-    #             "avg_rmse": np.mean(avg_metrics_per_cv["rmse"]),
-    #             "avg_r2": np.mean(avg_metrics_per_cv["r2"]),
-    #             "avg_runtime": np.mean(avg_metrics_per_cv["runtime"]),
-    #             "cv_losses": cv_losses,
-    #             "y_preds": y_preds,
-    #         }
-
-    #         # Print summary for the current model
-    #         print(f"Model {model_name} results:")
-    #         print(f"  Average MSE: {nn_results[model_name]['avg_mse']:.4f}")
-    #         print(f"  Average MAE: {nn_results[model_name]['avg_mae']:.4f}")
-    #         print(f"  Average RMSE: {nn_results[model_name]['avg_rmse']:.4f}")
-    #         print(f"  Average R²: {nn_results[model_name]['avg_r2']:.4f}")
-    #         print(f"  Average Runtime: {nn_results[model_name]['avg_runtime']:.2f}s")
-
-    #     # with open(nn_performance_path, "wb") as f:
-    #     #     pickle.dump(nn_results, f, )
-    #     # with open(cv_losses_outpath, "wb") as f:
-    #     #     pickle.dump(cv_losses, f, )
-    #     # with open(y_pred_outpath, "wb") as f:
-    #     #     pickle.dump(y_preds, f,)
-    # else:
-    #     with open(nn_performance_path, 'rb') as f:
-    #         nn_results = pickle.load(f)
-    #     with open(cv_losses_outpath, 'rb') as f:
-    #         cv_losses = pickle.load(f)
-    #     with open(y_pred_outpath, 'rb') as f:
-    #         y_preds = pickle.load(f)
-    # return nn_results, cv_losses, y_preds
-
-
-
-        
-
 
 def get_eval_with_nn(X,y,nn_performance_path,cv_losses_outpath, y_pred_outpath, do_cv = 1):
     if not os.path.exists(nn_performance_path) or not os.path.exists(cv_losses_outpath):
@@ -421,12 +377,15 @@ def evaluate_metrics_in_context(y_true, y_pred, model_name, file_path=f"{TXT_OUT
 def train_and_evaluate_dt(X_train, y_train, X_test, y_test):
     # Initialize models
     dt = DecisionTreeRegressor(random_state=GT_ID)
-    bagging = BaggingRegressor(estimator =dt, n_estimators=24, random_state=GT_ID)
-    boosting = GradientBoostingRegressor(n_estimators=24, learning_rate=0.1, random_state=GT_ID)
+    bagging = BaggingRegressor(estimator =dt, n_estimators=N_ESTIMATOR, random_state=GT_ID)
+    boosting = GradientBoostingRegressor(n_estimators=N_ESTIMATOR, learning_rate=0.1, random_state=GT_ID)
     xgboost_model = xgb.XGBRegressor(objective="reg:squarederror", random_state=GT_ID)
-    rf = RandomForestRegressor(n_estimators=24, random_state=GT_ID)
-    extra_trees = ExtraTreesRegressor(n_estimators=24, random_state=GT_ID)
-    hist_gb = HistGradientBoostingRegressor(max_iter=24, random_state=GT_ID)
+    if any(X_train.dtypes == 'category'):
+        xgboost_model = xgb.XGBRegressor(objective="reg:squarederror",random_state=GT_ID,enable_categorical=True)
+    else: xgboost_model = xgb.XGBRegressor(objective="reg:squarederror",random_state=GT_ID)
+    rf = RandomForestRegressor(n_estimators=N_ESTIMATOR, random_state=GT_ID)
+    extra_trees = ExtraTreesRegressor(n_estimators=N_ESTIMATOR, random_state=GT_ID)
+    hist_gb = HistGradientBoostingRegressor(max_iter=N_ESTIMATOR, random_state=GT_ID)
     
     
     param_grid = {  'max_depth': [3, 5, 10],
@@ -460,12 +419,14 @@ def train_and_evaluate_dt(X_train, y_train, X_test, y_test):
         mae = mean_absolute_error(y_test, y_pred)
         r2 = r2_score(y_test, y_pred)
         rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+        rmlse = np.sqrt(mean_squared_error(np.log1p(y_test), np.log1p(y_pred)))
         model_params = model.get_params() if hasattr(model, 'get_params') else None
 
         results[model_name] = {
             "MSE": mse,
             "MAE": mae,
             "RMSE": rmse,
+            "RMLSE": rmlse,
             "R2": r2,
             "runtime": time.time() - start_time,
             'params': model_params,
@@ -484,6 +445,7 @@ def train_and_evaluate_dt(X_train, y_train, X_test, y_test):
             f"MSE: {results[model_name]['MSE']:.4f}\n"
             f"MAE: {results[model_name]['MAE']:.4f}\n"
             f"RMSE: {results[model_name]['RMSE']:.4f}\n"
+            f"RMLSE: {results[model_name]['RMLSE']:.4f}\n"
             f"R2: {results[model_name]['R2']:.4f}\n"
             f"Runtime: {results[model_name]['runtime']:.2f} seconds\n"
             f"Model Hyperparameters: {model_params}\n"  
@@ -526,7 +488,6 @@ def check_etl():
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=.1, random_state=GT_ID)
     test_data_etl_input_check(X,y,X_train, X_test, y_train, y_test, show = True)
     # etl.graph_raw_data(X, y)
-
     print("======> Data verification complete")
     return X,y,X_train, X_test, y_train, y_test 
 
@@ -602,8 +563,8 @@ def get_solutions(X_train):
 def main(): 
     np.random.seed(GT_ID)
   
-    do_skl_train = 0
-    do_torch_train = 1
+    do_skl_train = 1
+    do_torch_train = 0
     start_time = time.time()
     X,y,X_train, X_test, y_train, y_test  = check_etl()
     check_data_info(X, y, X_train, X_test, y_train, y_test, show = False)
@@ -612,20 +573,19 @@ def main():
     ###### Sklearn models (just DT for now)
     if do_skl_train:
         dt_result_save_file = f"{Y_PRED_OUTDIR}/dt_results.pkl"
-        if not os.path.exists(dt_result_save_file):
+        if not os.path.exists(dt_result_save_file) or os.path.exists(dt_result_save_file):
             results = train_and_evaluate_dt(X_train, y_train, X_test, y_test)
             save_results(results, f"{Y_PRED_OUTDIR}/dt_results.pkl")
         
     ####### Torch models (just MPL for now)
     if do_torch_train:
         mpl_result_save_file = f"{Y_PRED_OUTDIR}/mpl_results.pkl"
-        if not os.path.exists(mpl_result_save_file):
+        if not os.path.exists(mpl_result_save_file) or os.path.exists(mpl_result_save_file):
             results = train_and_evaluate_mpl(X,y)
             save_results(results, f"{Y_PRED_OUTDIR}/mpl_results.pkl")
         
-
     ######## done training, now inference and derive solutions.csv
-    get_solutions(X_train)
+    # get_solutions(X_train)
     
 
 if __name__ == "__main__":
@@ -636,8 +596,8 @@ if __name__ == "__main__":
         device = torch.device("mps")
     else:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    kf = KFold(n_splits=K_FOLD_CV, shuffle=True, random_state=GT_ID)
     print(f"Torch will be running on {device}")
     ####################
+    # etl.prelim_view()
     main()
     

@@ -11,10 +11,10 @@ from tabulate import tabulate
 import pickle
 import random
 from copy import deepcopy
-import rohlik_sales.hypotheses
+import insurance_regression.hypotheses
 from src.models import *
 from src.models_reg import *
-from rohlik_sales.config import *
+from insurance_regression.config import *
 import joblib
 
 import math
@@ -395,8 +395,9 @@ def train_nn_early_stop_regression(X_train, y_train, X_test, y_test, device,para
     mse = mean_squared_error(y_test, outputs)
     mae = mean_absolute_error(y_test, outputs)
     rmse = np.sqrt(mse)
+    rmlse = np.sqrt(mean_squared_error(np.log1p(y_test), np.log1p(outputs)))
     r2 = r2_score(y_test, outputs)
-    return mse, mae, rmse, r2, runtime, model, epoch_losses
+    return mse, mae, rmse, r2,rmlse, runtime, model, epoch_losses
 
 
 def save_model_log_results(best_cv_perfs, best_params,best_eval_func,best_models_ensemble, model_name):
@@ -468,13 +469,15 @@ def reg_hyperparameter_tuning(X,y, device, model_name, do_cv=0):
                         'weight_decay': weight_decay,
                         'lr': lr
                     }
-                    criterion = nn.MSELoss(reduction='mean')
+                    # criterion = nn.MSELoss(reduction='mean')
+                    criterion = RMSLELoss()
                     ############################# for kfold implemntation
                     avg_metrics_per_cv = {
                         "MSE": [],
                         "MAE": [],
                         "RMSE": [],
                         "R2": [],
+                        "RMLSE": [],
                         "runtime": []
                     }
                     cv_losses = []
@@ -483,13 +486,14 @@ def reg_hyperparameter_tuning(X,y, device, model_name, do_cv=0):
                         print(f"Starting fold {fold_idx + 1}")
                         X_train, X_val = X[train_idx], X[val_idx]
                         y_train, y_val = y[train_idx], y[val_idx]
-                        mse, mae, rmse, r2, runtime, model, epoch_losses = train_nn_early_stop_regression(
+                        mse, mae, rmse, r2,rmlse, runtime, model, epoch_losses = train_nn_early_stop_regression(
                                             X_train, y_train, X_val, y_val, 
                                             device, params_dict, criterion, model_name)
                         avg_metrics_per_cv["MSE"].append(mse)
                         avg_metrics_per_cv["MAE"].append(mae)
                         avg_metrics_per_cv["RMSE"].append(rmse)
                         avg_metrics_per_cv["R2"].append(r2)
+                        avg_metrics_per_cv["RMLSE"].append(rmlse)
                         avg_metrics_per_cv["runtime"].append(runtime)
                         cv_losses.append(epoch_losses)
                         fold_models.append(model)
@@ -500,6 +504,7 @@ def reg_hyperparameter_tuning(X,y, device, model_name, do_cv=0):
                         "mse": avg_metrics_per_cv["MSE"],
                         "mae": avg_metrics_per_cv["MAE"],
                         "rmse": avg_metrics_per_cv["RMSE"],
+                        "rmlse": avg_metrics_per_cv["RMLSE"],
                         "r2": avg_metrics_per_cv["R2"]
                     }.get(EVAL_FUNC_METRIC.lower(), avg_metrics_per_cv["MAE"])  # Default to MAE if metric is undefined
 

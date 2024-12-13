@@ -2,8 +2,8 @@ from config import *
 from tests import *
 from src.models import *
 from utils import *
-import rohlik_sales.etl as etl
-import rohlik_sales.plots as plots
+import insurance_regression.etl as etl
+import insurance_regression.plots as plots
 import pickle
 import glob
 import re

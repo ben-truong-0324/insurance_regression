@@ -9,7 +9,7 @@ from sklearn.metrics import silhouette_score
 import pickle
 import torch
 
-from rohlik_sales.config import *
+from insurance_regression.config import *
 
 def plot_fitness_iterations(nn_models, algorithm_names):
     plt.figure(figsize=(12, 6))
