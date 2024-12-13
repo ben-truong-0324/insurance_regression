@@ -389,11 +389,12 @@ def evaluate_metrics_in_context(y_true, y_pred, model_name, file_path=f"{TXT_OUT
 def train_and_evaluate_dt(X_train, y_train, X_test, y_test):
     # Initialize models
     dt = DecisionTreeRegressor(random_state=GT_ID)
-    bagging = BaggingRegressor(estimator =dt, n_estimators=N_ESTIMATOR, random_state=GT_ID)
+    
     boosting = GradientBoostingRegressor(n_estimators=N_ESTIMATOR, learning_rate=0.001, random_state=GT_ID)
     if any(X_train.dtypes == 'category'):
-        xgboost_model = xgb.XGBRegressor(objective="reg:squarederror",random_state=GT_ID,enable_categorical=True,reg_alpha=0.1, )
+        xgboost_model = xgb.XGBRegressor(objective="reg:squarederror",random_state=GT_ID,enable_categorical=True,)
     else: xgboost_model = xgb.XGBRegressor(objective="reg:squarederror",random_state=GT_ID, )
+    bagging = BaggingRegressor(estimator =xgboost_model, n_estimators=N_ESTIMATOR, random_state=GT_ID)
     rf = RandomForestRegressor(n_estimators=N_ESTIMATOR, random_state=GT_ID)
     extra_trees = ExtraTreesRegressor(n_estimators=N_ESTIMATOR, random_state=GT_ID)
     hist_gb = HistGradientBoostingRegressor(max_iter=N_ESTIMATOR, random_state=GT_ID)
@@ -406,13 +407,13 @@ def train_and_evaluate_dt(X_train, y_train, X_test, y_test):
     
     # Fit models
     models = {
-        "Default Decision Tree": dt,
-        "Bagging with Decision Tree": bagging,
-        "Boosting with Decision Tree": boosting,
-        "XGBoost": xgboost_model,
-        "Random Forest": rf,
-        "Extra Trees": extra_trees,
-        "Histogram-based Gradient Boosting": hist_gb,
+        # "Default Decision Tree": dt,
+        "Bagging": bagging,
+        # "Boosting with Decision Tree": boosting,
+        # "XGBoost": xgboost_model,
+        # "Random Forest": rf,
+        # "Extra Trees": extra_trees,
+        # "Histogram-based Gradient Boosting": hist_gb,
         # "Tuned Decision Tree (GridSearch)": grid_search,
     }
     results = {}
@@ -585,9 +586,13 @@ def get_solutions(X_train):
             else:
                 print(f"Model {model_name} solutions already created at {result_file}")
         if inferred:
+            print(f"solution_id shape: {solution_id.shape}")
+            print(f"predictions shape: {predictions.shape}")
+            predictions = predictions.squeeze() if predictions.ndim > 1 else predictions
+            solution_id = solution_id.squeeze() if isinstance(solution_id, pd.DataFrame) else solution_id
             results_df = pd.DataFrame({
                 'id': solution_id,
-                'sales_hat': predictions.squeeze(),
+                'Premium Amount': predictions.squeeze(),
             })
             
             results_df.to_csv(result_file, index=False)

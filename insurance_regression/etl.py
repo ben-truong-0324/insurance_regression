@@ -31,6 +31,7 @@ def handle_null_and_transform(df,label_encoders=None):
         pd.DataFrame: The transformed dataframe.
         dict: A dictionary containing label encoders for categorical columns.
     """
+    print("herro")
     if label_encoders is None:
         label_encoders = {}
     scaler = MinMaxScaler()  # For normalization
@@ -42,21 +43,26 @@ def handle_null_and_transform(df,label_encoders=None):
     df['Annual Income'] = df['Annual Income'].fillna(0)
     df['Annual Income'] = np.log10(df['Annual Income'] + 1)  # Adding 1 to avoid log(0)
     df['Marital Status'] = df['Marital Status'].fillna("unknown")
-
-    if label_encoders and 'Marital Status' in label_encoders:
+    
+    if 'Marital Status' in label_encoders:
         df['Marital Status'] = label_encoders['Marital Status'].transform(df['Marital Status'])
     else:
         le_marital_status = LabelEncoder()
         df['Marital Status'] = le_marital_status.fit_transform(df['Marital Status'])
         label_encoders['Marital Status'] = le_marital_status
+    print("check2")
 
-    le_marital_status = LabelEncoder()
-    df['Marital Status'] = le_marital_status.fit_transform(df['Marital Status'])
-    label_encoders['Marital Status'] = le_marital_status
-    df['Number of Dependents'] = df['Number of Dependents'].fillna(-1)
-    df['Number of Dependents'] = scaler.fit_transform(df[['Number of Dependents']])
+    if 'Number of Dependents' in label_encoders:
+        df['Number of Dependents'] = label_encoders['Number of Dependents'].transform(df['Number of Dependents'])
+    else:
+        le_depend = LabelEncoder()
+        df['Number of Dependents'] = le_depend.fit_transform(df['Number of Dependents'])
+        label_encoders['Number of Dependents'] = le_depend
+    print("check3")
+
     df['Occupation'] = df['Occupation'].fillna("unknown")
-    if label_encoders and 'Occupation' in label_encoders:
+    print("check4")
+    if 'Occupation' in label_encoders:
         df['Occupation'] = label_encoders['Occupation'].transform(df['Occupation'])
     else:
         le_occupation = LabelEncoder()
@@ -71,7 +77,7 @@ def handle_null_and_transform(df,label_encoders=None):
     df['Credit Score'] = df['Credit Score'].fillna(df['Credit Score'].mean())
     df['Insurance Duration'] = df['Insurance Duration'].fillna(0)
     df['Customer Feedback'] = df['Customer Feedback'].fillna("unknown")
-    if label_encoders and 'Customer Feedback' in label_encoders:
+    if 'Customer Feedback' in label_encoders:
         df['Customer Feedback'] = label_encoders['Customer Feedback'].transform(df['Customer Feedback'])
     else:
         le_feedback = LabelEncoder()
@@ -228,6 +234,7 @@ def get_test_data():
 
                 with open(f"{LABEL_ENCODERS_PKL_OUTDIR}/lencoders.pkl", "rb") as f:
                     encoders = pickle.load(f)
+                print("got here")
                 df, encoders =  handle_null_and_transform(df,encoders)
 
                 columns_to_drop = ['id', 'Age']
@@ -251,8 +258,10 @@ def get_test_data():
                 return None
         else:
             X_df = pd.read_pickle(PROCESSED_TEST_PATH)
-            solution_id_df = pd.read_csv(solution_id_outpath)
-            solution_id = solution_id_df['solution_id']
+            solution_id_df = pd.read_pickle(solution_id_outpath)
+            
+            solution_id = pd.DataFrame(solution_id_df.values, columns=['id'])
+            print(solution_id.head())
         print(X_df.info())
         print(solution_id.info())
     else: 
