@@ -8,6 +8,8 @@ import os
 from sklearn.metrics import silhouette_score
 import pickle
 import torch
+from sklearn.decomposition import FastICA
+from sklearn.decomposition import PCA
 
 from insurance_regression.config import *
 
@@ -1538,7 +1540,7 @@ def plot_dt_results(results,save_path):
 
 
 
-def plot_predictions_vs_actuals(y_test, y_pred, model_name, save_path):
+def plot_predictions_vs_actuals(y_test, y_pred, model_name, save_path, save_path1):
     if not os.path.exists(save_path):
         # Assuming y_test and y_pred are pandas Series or numpy arrays
         if isinstance(y_test, pd.Series):
@@ -1567,13 +1569,25 @@ def plot_predictions_vs_actuals(y_test, y_pred, model_name, save_path):
         
         plt.tight_layout()
         plt.savefig(save_path)
-        # plt.show()
-        
+        plt.close()
+
+        # Plot histogram for actual values (y_test)
+        plt.hist(y_test, bins=50, alpha=0.5, label='Actual (y_test)', color='blue')
+        # Plot histogram for predicted values (y_pred)
+        plt.hist(y_pred, bins=50, alpha=0.5, label='Predicted (y_pred)', color='red')
+        # Add labels and title
+        plt.xlabel('Target Value')
+        plt.ylabel('Frequency')
+        plt.title('Actual vs Predicted Target Distribution')
+        plt.legend()
+
+        plt.show()
+        plt.savefig(save_path)
         plt.close()
 
 
 
-def plot_predictions(y_val, outputs, fold_idx, model_name,save_path):
+def plot_predictions(y_val, outputs, fold_idx, model_name,save_path,save_path1):
     """
     Plot true values (y_val) vs predicted values (outputs) for the current fold.
 
@@ -1607,13 +1621,19 @@ def plot_predictions(y_val, outputs, fold_idx, model_name,save_path):
     plt.title(f'{model_name} Fold {fold_idx + 1}: True vs Pred')
     plt.legend()
     plt.grid(True)
-    
     # Set the same scale for both axes
     plt.xlim(min_val, max_val)
     plt.ylim(min_val, max_val)
-    
-    # plt.show()
     plt.savefig(save_path)
+    plt.close()
+
+    plt.hist(y_val, bins=50, alpha=0.5, label='Actual (y_test)', color='blue')
+    plt.hist(outputs, bins=50, alpha=0.5, label='Predicted (y_pred)', color='red')
+    plt.xlabel('Target Value')
+    plt.ylabel('Frequency')
+    plt.title('Actual vs Predicted Target Distribution')
+    plt.legend()
+    plt.savefig(save_path1)
     plt.close()
 
 import matplotlib.pyplot as plt
@@ -1637,6 +1657,61 @@ def plot_epoch_losses(epoch_losses, save_path):
     plt.legend()
     
     # Save the plot to the specified path
+    plt.savefig(save_path)
+    plt.close()  # Close the plot to release memory
+    print(f"Loss plot saved at: {save_path}")
+
+def plot_pca(X_df,Y_df,save_path):
+    Y_binned = pd.cut(Y_df, bins=[0, 500, 1000, 2000, 4000, np.inf], labels=[0, 1, 2, 3, 4])
+    # Y_binned = Y_binned.fillna(-1) 
+    pca = PCA(n_components=2)
+    X_pca = pca.fit_transform(X_df)
+    
+    plt.figure(figsize=(12, 6))
+    plt.subplot(1, 2, 1)
+    scatter1 = plt.scatter(X_pca[:, 0], X_pca[:, 1], c=X_df['km_clus'], cmap='viridis', alpha=0.7)
+    plt.title("PCA with KMeans Clustering")
+    plt.colorbar(scatter1, label="KMeans Cluster")
+    plt.xlabel("PCA Component 1")
+    plt.ylabel("PCA Component 2")
+
+    # Binned Target
+    plt.subplot(1, 2, 2)
+    scatter2 = plt.scatter(X_pca[:, 0], X_pca[:, 1], c=Y_binned, cmap='plasma', alpha=0.7)
+    plt.title("PCA with Binned Target")
+    plt.colorbar(scatter2, label="Binned Target")
+    plt.xlabel("PCA Component 1")
+    plt.ylabel("PCA Component 2")
+
+    plt.tight_layout()
+    plt.savefig(save_path)
+    plt.close()  # Close the plot to release memory
+    print(f"Loss plot saved at: {save_path}")
+
+def plot_ica(X_df,Y_df,save_path):
+    Y_binned = pd.cut(Y_df, bins=[0, 500, 1000, 2000, 4000, np.inf], labels=[0, 1, 2, 3, 4])
+    ica = FastICA(n_components=2, random_state=42)  # You can adjust the n_components as needed
+    X_ica = ica.fit_transform(X_df)
+    
+    plt.figure(figsize=(12, 6))
+
+    # KMeans Clusters
+    plt.subplot(1, 2, 1)
+    scatter1 = plt.scatter(X_ica[:, 0], X_ica[:, 1], c=X_df['km_clus'], cmap='viridis', alpha=0.7)
+    plt.title("ICA with KMeans Clustering")
+    plt.colorbar(scatter1, label="KMeans Cluster")
+    plt.xlabel("ICA Component 1")
+    plt.ylabel("ICA Component 2")
+
+    # Binned Target
+    plt.subplot(1, 2, 2)
+    scatter2 = plt.scatter(X_ica[:, 0], X_ica[:, 1], c=Y_binned, cmap='plasma', alpha=0.7)
+    plt.title("ICA with Binned Target")
+    plt.colorbar(scatter2, label="Binned Target")
+    plt.xlabel("ICA Component 1")
+    plt.ylabel("ICA Component 2")
+
+    plt.tight_layout()
     plt.savefig(save_path)
     plt.close()  # Close the plot to release memory
     print(f"Loss plot saved at: {save_path}")

@@ -17,5 +17,6 @@ dependencies:
   - pip  # Ensure pip is available for installing pip packages
   - pip:
   - xgboost
+  - imbalanced-learn
     # - scikit-learn 
     # - bayesian-optimization

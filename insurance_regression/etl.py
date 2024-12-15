@@ -18,9 +18,15 @@ import pickle
 import pandas as pd
 from datetime import datetime
 import numpy as np
+from sklearn.cluster import KMeans
+from sklearn.mixture import GaussianMixture
+from sklearn.cluster import DBSCAN
+from sklearn.cluster import AgglomerativeClustering
+from sklearn.cluster import SpectralClustering
+from sklearn.decomposition import PCA
+import matplotlib.pyplot as plt
 
-
-def handle_null_and_transform(df,label_encoders=None):
+def handle_null_and_transform_old(df,label_encoders=None):
     """
     Handles null values in the dataframe and applies transformations based on the specified rules.
     
@@ -99,6 +105,86 @@ def handle_null_and_transform(df,label_encoders=None):
 
     return df, label_encoders
 
+
+def handle_null_and_transform(df,label_encoders=None):
+    """
+    Handles null values in the dataframe and applies transformations based on the specified rules.
+    
+    Args:
+        df (pd.DataFrame): The input dataframe.
+    
+    Returns:
+        pd.DataFrame: The transformed dataframe.
+        dict: A dictionary containing label encoders for categorical columns.
+    """
+    if label_encoders is None:
+        label_encoders = {}
+    print("here")
+    scaler = MinMaxScaler()  # For normalization
+    df['Age'] = df['Age'].fillna(-1).astype(int)
+    df['Age Group'] = pd.cut(
+        df['Age'], bins=[-2,0, 12, 19, 35, 50, 65, np.inf],
+        labels=[0, 1, 2, 3, 4, 5,6])
+    print("here")
+    df['Age Group'] = df['Age Group'].astype(int)
+    print("here")
+    df['Annual Income'] = df['Annual Income'].fillna(0)
+    print("here")
+    df['Annual Income'] = np.log10(df['Annual Income'] + 1)  # Adding 1 to avoid log(0)
+    print("here1")
+    df['Marital Status'] = df['Marital Status'].fillna("unknown")
+    if 'Marital Status' in label_encoders:
+        df['Marital Status'] = label_encoders['Marital Status'].transform(df['Marital Status'])
+    else:
+        le_marital_status = LabelEncoder()
+        df['Marital Status'] = le_marital_status.fit_transform(df['Marital Status'])
+        label_encoders['Marital Status'] = le_marital_status
+    print("here2")
+    if 'Number of Dependents' in label_encoders:
+        df['Number of Dependents'] = label_encoders['Number of Dependents'].transform(df['Number of Dependents'])
+    else:
+        le_depend = LabelEncoder()
+        df['Number of Dependents'] = le_depend.fit_transform(df['Number of Dependents'])
+        label_encoders['Number of Dependents'] = le_depend
+    print("here3")
+    df['Occupation'] = df['Occupation'].fillna("unknown")
+    if 'Occupation' in label_encoders:
+        df['Occupation'] = label_encoders['Occupation'].transform(df['Occupation'])
+    else:
+        le_occupation = LabelEncoder()
+        df['Occupation'] = le_occupation.fit_transform(df['Occupation'])
+        label_encoders['Occupation'] = le_occupation
+    print("here4")
+    
+    df['Health Score'] = df['Health Score'].fillna(-1)
+    df['Health Score'] = scaler.fit_transform(df[['Health Score']])
+    df['Previous Claims'] = df['Previous Claims'].fillna(-1)
+    df['Vehicle Age'] = df['Vehicle Age'].fillna(-1)
+    df['Credit Score'] = df['Credit Score'].fillna(-1)
+    df['Insurance Duration'] = df['Insurance Duration'].fillna(-1)
+    df['Customer Feedback'] = df['Customer Feedback'].fillna("unknown")
+    if 'Customer Feedback' in label_encoders:
+        df['Customer Feedback'] = label_encoders['Customer Feedback'].transform(df['Customer Feedback'])
+    else:
+        le_feedback = LabelEncoder()
+        df['Customer Feedback'] = le_feedback.fit_transform(df['Customer Feedback'])
+        label_encoders['Customer Feedback'] = le_feedback
+
+    categorical_columns = [
+       'Gender', 'Education Level', 
+        'Location', 'Policy Type', 'Smoking Status', 
+        'Exercise Frequency', 'Property Type'
+    ]
+    for col in categorical_columns:
+        if label_encoders and col in label_encoders:
+            df[col] = label_encoders[col].transform(df[col])
+        else:
+            le = LabelEncoder()
+            df[col] = le.fit_transform(df[col])  # Overwrite the original column with encoded values
+            label_encoders[col] = le   # Save the encoder for future use
+
+    return df, label_encoders
+
 def convert_and_normalize_days_since_policy_start(df, date_column):
     df[date_column] = pd.to_datetime(df[date_column], errors='coerce')
     today = datetime.today()
@@ -130,6 +216,32 @@ def encode_and_save_labels(df, categorical_columns):
     print(f"Label encoders saved at {encoder_path}")
     return df
 
+def do_ul_cluster(X_df):
+    X_og = X_df.drop(columns=['Premium Amount']).copy()
+    ul_cluster_count = 5
+
+    print("kmeans")
+    kmeans = KMeans(n_clusters=ul_cluster_count, random_state=GT_ID)
+    km_clus = kmeans.fit_predict(X_og)
+    X_df['km_clus'] = km_clus
+
+    print("gmm")
+    gmm = GaussianMixture(n_components=ul_cluster_count, random_state=GT_ID)
+    gmm_clus = gmm.fit_predict(X_og)
+    X_df['gmm_clus'] = gmm_clus
+
+    print("dbscan")
+    dbscan = DBSCAN(eps=0.5, min_samples=5)
+    dbscan_clus = dbscan.fit_predict(X_og)
+    X_df['dbscan_clus'] = dbscan_clus
+    
+    # print("spec clus")
+    # spectral = SpectralClustering(n_clusters=ul_cluster_count, affinity='nearest_neighbors', random_state=GT_ID)
+    # spectral_clus = spectral.fit_predict(X_og)
+    # X_df['spectral_clus'] = spectral_clus
+
+    return X_df
+
 def get_data():
     print(f"Getting data for {DATASET_SELECTION}")
     if "kaggle_insurance_regression" in DATASET_SELECTION:
@@ -138,6 +250,8 @@ def get_data():
                 df = pd.read_csv(TRAIN_PATH)
                 print("Accessed .csv in data folder")
                 df = convert_and_normalize_days_since_policy_start(df, 'Policy Start Date')
+
+                df = df.dropna()
                 df, encoders = handle_null_and_transform(df)
                 encoder_path = f"{LABEL_ENCODERS_PKL_OUTDIR}/lencoders.pkl"
                 with open(encoder_path, "wb") as f:
@@ -148,6 +262,12 @@ def get_data():
                 nan_summary = df.isnull().sum()
                 print("Missing values in each column:")
                 print(nan_summary[nan_summary > 0])
+
+                scaler = MinMaxScaler()
+                numeric_cols = df.select_dtypes(include=['float64', 'int64','int32']).columns
+                numeric_cols = numeric_cols[df.columns != 'Premium Amount']
+                df[numeric_cols] = scaler.fit_transform(df[numeric_cols])
+                df = do_ul_cluster(df)
                 df.to_pickle(PROCESSED_TRAIN_PATH)
                 print(f"DataFrame updated and saved as pickle file: {PROCESSED_TRAIN_PATH}")
 
@@ -173,6 +293,11 @@ def get_data():
         print("=" * 120)
         Y_df = df['Premium Amount']  # Target variable
         X_df = df.drop(columns=[ 'Premium Amount'])
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        plots.plot_pca(X_df,Y_df, f"{AGGREGATED_OUTDIR}/{timestamp}_pca.png" )
+        plots.plot_ica(X_df,Y_df, f"{AGGREGATED_OUTDIR}/{timestamp}_ica.png" )
+       
+
     else: 
         print("#"*18)
         raise ValueError("Invalid dataset specified. Check config.py")

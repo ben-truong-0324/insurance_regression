@@ -27,9 +27,9 @@ import math
 import itertools
 import joblib
 import xgboost as xgb
-
+from scipy.stats import gaussian_kde
 from scipy.stats import ttest_1samp
-
+from imblearn.over_sampling import SMOTE
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.neural_network import MLPClassifier
@@ -41,7 +41,7 @@ from sklearn.metrics import confusion_matrix,precision_score, \
 from sklearn.cluster import KMeans, AgglomerativeClustering,DBSCAN,Birch,MeanShift, SpectralClustering
 from sklearn.mixture import GaussianMixture
 from sklearn.model_selection import ParameterSampler
-
+from sklearn.metrics import classification_report
 #import dimension reduction modules
 from sklearn.decomposition import PCA, FastICA
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
@@ -341,6 +341,21 @@ def get_eval_with_nn(X,y,nn_performance_path,cv_losses_outpath, y_pred_outpath, 
         print(f"Saved results to {NN_PKL_OUTDIR}/farsight_best_of_{model_name}_nn_results.pkl")
 
 def evaluate_metrics_in_context(y_true, y_pred, model_name, file_path=f"{TXT_OUTDIR}/dt_model_results.txt"):
+    print("Statistics for y_test (Actual values):")
+    print(f"Count: {len(y_true)}")
+    print(f"Mean: {np.mean(y_true):.2f}")
+    print(f"Standard Deviation: {np.std(y_true):.2f}")
+    print(f"Min: {np.min(y_true)}")
+    print(f"Max: {np.max(y_true)}")
+    print(f"Unique values: {len(np.unique(y_true))}")
+
+    print("\nStatistics for y_pred (Predicted values):")
+    print(f"Count: {len(y_pred)}")
+    print(f"Mean: {np.mean(y_pred):.2f}")
+    print(f"Standard Deviation: {np.std(y_pred):.2f}")
+    print(f"Min: {np.min(y_pred)}")
+    print(f"Max: {np.max(y_pred)}")
+    print(f"Unique values: {len(np.unique(y_pred))}")
     # Calculate MSE, MAE, and R²
     print(f"For model {model_name}:")
     mse = mean_squared_error(y_true, y_pred)
@@ -389,11 +404,10 @@ def evaluate_metrics_in_context(y_true, y_pred, model_name, file_path=f"{TXT_OUT
 def train_and_evaluate_dt(X_train, y_train, X_test, y_test):
     # Initialize models
     dt = DecisionTreeRegressor(random_state=GT_ID)
-    
     boosting = GradientBoostingRegressor(n_estimators=N_ESTIMATOR, learning_rate=0.001, random_state=GT_ID)
     if any(X_train.dtypes == 'category'):
         xgboost_model = xgb.XGBRegressor(objective="reg:squarederror",random_state=GT_ID,enable_categorical=True,)
-    else: xgboost_model = xgb.XGBRegressor(objective="reg:squarederror",random_state=GT_ID, )
+    else: xgboost_model = xgb.XGBRegressor(objective="reg:squarederror",random_state=GT_ID,learning_rate=1, max_depth = 10)
     bagging = BaggingRegressor(estimator =xgboost_model, n_estimators=N_ESTIMATOR, random_state=GT_ID)
     rf = RandomForestRegressor(n_estimators=N_ESTIMATOR, random_state=GT_ID)
     extra_trees = ExtraTreesRegressor(n_estimators=N_ESTIMATOR, random_state=GT_ID)
@@ -407,23 +421,35 @@ def train_and_evaluate_dt(X_train, y_train, X_test, y_test):
     
     # Fit models
     models = {
-        # "Default Decision Tree": dt,
-        "Bagging": bagging,
+        "Default Decision Tree": dt,
+        # "Bagging": bagging,
         # "Boosting with Decision Tree": boosting,
-        # "XGBoost": xgboost_model,
+        "XGBoost": xgboost_model,
         # "Random Forest": rf,
         # "Extra Trees": extra_trees,
         # "Histogram-based Gradient Boosting": hist_gb,
         # "Tuned Decision Tree (GridSearch)": grid_search,
     }
+    print(min(y_test))
+    print(min(y_train))
+    print("done")
     results = {}
+    print("getting smote")
+    smote = SMOTE(sampling_strategy='auto', random_state=42)
+    X_train, y_train = smote.fit_resample(X_train, y_train)
     for model_name, model in models.items():
+        print(model)
         start_time = time.time()
-        model.fit(X_train, y_train)
+        model.fit(X_train, y_train, )
         y_pred = model.predict(X_test)
-        y_pred = np.abs(y_pred)
 
-        evaluate_metrics_in_context(y_test, y_pred, model_name)
+        accuracy = accuracy_score(y_test, y_pred)
+        print(f"Accuracy: {accuracy * 100:.2f}%")
+        print("Classification Report:")
+        print(classification_report(y_test, y_pred))
+
+        # evaluate_metrics_in_context(y_test, y_pred, model_name)
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         if len(y_test) > 10000:
             random_indices = np.random.choice(len(y_test), 10000, replace=False)
             try:
@@ -433,15 +459,13 @@ def train_and_evaluate_dt(X_train, y_train, X_test, y_test):
                 print("Type of y_test:", type(y_test))
                 print("Type of y_pred:", type(y_pred))
                 print(e)
-            # plots.plot_predictions_vs_actuals(y_test_subset, y_pred_subset, model_name,
-            #                                 f"{AGGREGATED_OUTDIR}/pred_actual_diff_{model_name}_first10k.png")
             plots.plot_predictions( y_test_subset, y_pred_subset,1, model_name,
-                    f"{AGGREGATED_OUTDIR}/pred_actual_diff_{model_name}_first10k.png")
+                    f"{AGGREGATED_OUTDIR}/{timestamp}_pred_actual_diff_{model_name}_first10k.png",
+                    f"{AGGREGATED_OUTDIR}/{timestamp}_pred_actual_hist_{model_name}_first10k.png")
         else:
-            # plots.plot_predictions_vs_actuals(y_test, y_pred, model_name,
-            #                                 f"{AGGREGATED_OUTDIR}/pred_actual_diff_{model_name}.png")
             plots.plot_predictions( y_test, y_pred,1, model_name,
-                    f"{AGGREGATED_OUTDIR}/pred_actual_diff_{model_name}.png")
+                    f"{AGGREGATED_OUTDIR}/{timestamp}_pred_actual_diff_{model_name}.png",
+                    f"{AGGREGATED_OUTDIR}/{timestamp}_pred_actual_hist_{model_name}.png")
 
         # Calculate losses
         if np.any(np.isnan(y_test)):
@@ -470,8 +494,8 @@ def train_and_evaluate_dt(X_train, y_train, X_test, y_test):
             MODELS_OUTDIR,
             f"{model_name}_{timestamp}.joblib"
         )
-        joblib.dump(model, model_path)
-        print(f"Model {model_name} saved at {model_path}")
+        # joblib.dump(model, model_path)
+        # print(f"Model {model_name} saved at {model_path}")
         log_entry = (
             f"Model: {model_name}\n"
             f"Saved Path: {model_path}\n"
@@ -521,7 +545,7 @@ def check_etl():
     X, y = etl.get_data()
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=.1, random_state=GT_ID)
     test_data_etl_input_check(X,y,X_train, X_test, y_train, y_test, show = True)
-    # etl.graph_raw_data(X, y)
+    etl.graph_raw_data(X_test, y_test)
     print("======> Data verification complete")
     return X,y,X_train, X_test, y_train, y_test 
 
@@ -601,15 +625,19 @@ def get_solutions(X_train):
 def main(): 
     np.random.seed(GT_ID)
   
-    do_skl_train = 0
-    do_torch_train = 1
+    do_skl_train = 1
+    do_torch_train = 0
     start_time = time.time()
     X,y,X_train, X_test, y_train, y_test  = check_etl()
     check_data_info(X, y, X_train, X_test, y_train, y_test, show = False)
     print(f"Time to load data: {time.time() - start_time}s")
 
     ###### Sklearn models (just DT for now)
+    print("hello")
     if do_skl_train:
+        print("starting skl models")
+        y_train = pd.cut(y_train, bins=[0, 300,500, 1000,1300, 2000, 3000, np.inf], labels=[0, 1, 2, 3, 4,5,6])
+        y_test = pd.cut(y_test, bins=[0, 300,500, 1000,1300, 2000, 3000, np.inf], labels=[0, 1, 2, 3, 4,5,6])
         # dt_result_save_file = f"{Y_PRED_OUTDIR}/dt_results.pkl"
         # if not os.path.exists(dt_result_save_file) or os.path.exists(dt_result_save_file):
         results = train_and_evaluate_dt(X_train, y_train, X_test, y_test)
@@ -623,7 +651,7 @@ def main():
             # save_results(results, f"{Y_PRED_OUTDIR}/mpl_results.pkl")
         
     ######## done training, now inference and derive solutions.csv
-    get_solutions(X_train)
+    # get_solutions(X_train)
     
 
 if __name__ == "__main__":

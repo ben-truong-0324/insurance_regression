@@ -414,11 +414,13 @@ def do_plot_preds_of_fold(y_test, y_pred, model_name, fold):
             print("Type of y_test:", type(y_test))
             print("Type of y_pred:", type(y_pred))
             print(e)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         plots.plot_predictions( y_test_subset, y_pred_subset,fold, model_name,
-                f"{AGGREGATED_OUTDIR}/{model_name}_{fold}_ypreds_first10k.png")
+                f"{AGGREGATED_OUTDIR}/{model_name}_{fold}_ypreds_first10k_{timestamp}.png")
     else:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         plots.plot_predictions( y_test, y_pred,fold, model_name,
-                f"{AGGREGATED_OUTDIR}/{model_name}_{fold}_ypreds.png")
+                f"{AGGREGATED_OUTDIR}/{model_name}_{fold}_ypreds_{timestamp}.png")
 
 def save_model_log_results(best_cv_perfs, best_params,best_eval_func,best_models_ensemble, model_name):
     print(f"Best Hyperparameters: {best_params}")
@@ -521,7 +523,7 @@ def reg_hyperparameter_tuning(X,y, device, model_name, do_cv=0):
                         fold_models.append(model)
                         ######
                         do_plot_preds_of_fold(y_val, outputs, model_name, fold_idx)
-                        plots.plot_epoch_losses(epoch_losses, f"{AGGREGATED_OUTDIR}/cv_losses_{model_name}_fold_{fold_idx}.png")
+                        # plots.plot_epoch_losses(epoch_losses, f"{AGGREGATED_OUTDIR}/cv_losses_{model_name}_fold_{fold_idx}.png")
                         
 
                     #once get the average of all folds
@@ -544,3 +546,24 @@ def reg_hyperparameter_tuning(X,y, device, model_name, do_cv=0):
                         best_models_ensemble = fold_models
     save_model_log_results(best_cv_perfs, best_params,best_eval_func,best_models_ensemble, model_name)
     return best_cv_perfs, best_params,best_eval_func, best_models_ensemble
+
+def compute_weights(y_train):
+    # Initialize an array of weights with default value of 1
+    weights = np.ones_like(y_train, dtype=float)
+    
+    # Define proximity thresholds for the target ranges
+    # Adjust these thresholds as needed
+    weight_decrease_range = 1200  # Decrease weight for values near 1200
+    weight_increase_ranges = [50, 2500]  # Increase weight for values near 50 and 2500
+    
+    # Compute the weights
+    for i, target_value in enumerate(y_train):
+        # Decrease weight for values near 1200 (within a defined range)
+        if abs(target_value - weight_decrease_range) < 100:  # Adjust proximity range as needed
+            weights[i] = 0.1  # Reduce weight for values near 1200
+        
+        # Increase weight for values near 50 and 2500
+        elif any(abs(target_value - x) < 100 for x in weight_increase_ranges):
+            weights[i] = 3.0  # Increase weight for values near 50 or 2500
+    
+    return weights
