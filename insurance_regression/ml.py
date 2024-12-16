@@ -411,17 +411,6 @@ def train_and_evaluate_svm(X_train, y_train, X_test, y_test):
     for kernel in kernels:
         print(f"\nTraining SVM with kernel: {kernel}")
         svm_model = SVC(kernel=kernel, C=1, gamma='scale', random_state=GT_ID)
-        
-
-        # # Predict and reverse map
-        # binned_y_pred = svm_model.predict(X_test)
-        # y_pred = []
-        # for pred in binned_y_pred:
-        #     distribution = bin_distributions[pred]
-        #     sampled_value = np.random.choice(distribution.index, p=distribution.values)
-        #     y_pred.append(sampled_value)
-        # y_pred = np.array(y_pred)
-
         bins = [0, 100, 400, 900, 1600, 2500, 3000, 4000, 5000, np.inf]
         bin_labels = range(len(bins) - 1)
         binned_y_train = pd.cut(y_train, bins=bins, labels=bin_labels)
@@ -431,7 +420,7 @@ def train_and_evaluate_svm(X_train, y_train, X_test, y_test):
             value_counts = bin_values.value_counts(normalize=True)  # Relative frequencies
             bin_distributions[bin_label] = value_counts
         svm_model.fit(X_train, binned_y_train)
-        binned_y_pred = model.predict(X_test)
+        binned_y_pred = svm_model.predict(X_test)
         y_pred = []
         for pred in binned_y_pred:
             bin_dist = bin_distributions[pred]
@@ -441,10 +430,11 @@ def train_and_evaluate_svm(X_train, y_train, X_test, y_test):
 
         binned_y_test = pd.cut(y_test, bins=bins, labels=bin_labels)
         accuracy = accuracy_score(binned_y_test, binned_y_pred)
+        class_report = classification_report(binned_y_test, binned_y_pred)
         print(f"Kernel: {kernel}")
         print(f"Accuracy: {accuracy * 100:.2f}%")
         print("Classification Report:")
-        print(classification_report(binned_y_test, binned_y_pred))
+        print(class_report)
 
         # Store results
         results[kernel] = {
@@ -781,7 +771,7 @@ def main():
             # save_results(results, f"{Y_PRED_OUTDIR}/mpl_results.pkl")
         
     ######## done training, now inference and derive solutions.csv
-    # get_solutions(X_train)
+    get_solutions(X_train)
     
 
 if __name__ == "__main__":
