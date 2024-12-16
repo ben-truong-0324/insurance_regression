@@ -28,6 +28,7 @@ import itertools
 import joblib
 import xgboost as xgb
 from xgboost import XGBClassifier
+from sklearn.svm import SVC
 
 from scipy.stats import gaussian_kde
 from scipy.stats import ttest_1samp
@@ -402,6 +403,61 @@ def evaluate_metrics_in_context(y_true, y_pred, model_name, file_path=f"{TXT_OUT
     
     # return mse, mae, r2, relative_mse, relative_mae
 
+def train_and_evaluate_svm(X_train, y_train, X_test, y_test):
+    kernels = ['linear', 'poly', 'rbf', 'sigmoid']
+    results = {}
+
+    # Train and evaluate for each kernel
+    for kernel in kernels:
+        print(f"\nTraining SVM with kernel: {kernel}")
+        svm_model = SVC(kernel=kernel, C=1, gamma='scale', random_state=GT_ID)
+        
+
+        # # Predict and reverse map
+        # binned_y_pred = svm_model.predict(X_test)
+        # y_pred = []
+        # for pred in binned_y_pred:
+        #     distribution = bin_distributions[pred]
+        #     sampled_value = np.random.choice(distribution.index, p=distribution.values)
+        #     y_pred.append(sampled_value)
+        # y_pred = np.array(y_pred)
+
+        bins = [0, 100, 400, 900, 1600, 2500, 3000, 4000, 5000, np.inf]
+        bin_labels = range(len(bins) - 1)
+        binned_y_train = pd.cut(y_train, bins=bins, labels=bin_labels)
+        bin_distributions = {}
+        for bin_label in bin_labels:
+            bin_values = y_train[binned_y_train == bin_label]
+            value_counts = bin_values.value_counts(normalize=True)  # Relative frequencies
+            bin_distributions[bin_label] = value_counts
+        svm_model.fit(X_train, binned_y_train)
+        binned_y_pred = model.predict(X_test)
+        y_pred = []
+        for pred in binned_y_pred:
+            bin_dist = bin_distributions[pred]
+            sampled_value = np.random.choice(bin_dist.index, p=bin_dist.values)
+            y_pred.append(sampled_value)
+        y_pred = np.array(y_pred)
+
+        binned_y_test = pd.cut(y_test, bins=bins, labels=bin_labels)
+        accuracy = accuracy_score(binned_y_test, binned_y_pred)
+        print(f"Kernel: {kernel}")
+        print(f"Accuracy: {accuracy * 100:.2f}%")
+        print("Classification Report:")
+        print(classification_report(binned_y_test, binned_y_pred))
+
+        # Store results
+        results[kernel] = {
+            'accuracy': accuracy,
+            'classification_report': class_report
+        }
+
+    # Print summary of results
+    print("\nSummary of Results:")
+    for kernel, metrics in results.items():
+        print(f"Kernel: {kernel}")
+        print(f"Accuracy: {metrics['accuracy']}\n")
+
 # Function to train and evaluate the Decision Tree Regressor with different configurations
 def train_and_evaluate_dt(X_train, y_train, X_test, y_test):
     
@@ -416,20 +472,24 @@ def train_and_evaluate_dt(X_train, y_train, X_test, y_test):
     rf = RandomForestRegressor(n_estimators=N_ESTIMATOR, random_state=GT_ID)
     extra_trees = ExtraTreesRegressor(n_estimators=N_ESTIMATOR, random_state=GT_ID)
     hist_gb = HistGradientBoostingRegressor(max_iter=N_ESTIMATOR, random_state=GT_ID)
-    
+    svm_model = SVC(kernel='rbf', C=1, gamma='scale', random_state=42)
+
     if any(X_train.dtypes == 'category'):
         xgb_class = XGBClassifier(
-            objective="multi:softmax", 
-            num_class=7,  # Number of bins
-            random_state=GT_ID, 
-            enable_categorical=True
+            objective="multi:softmax",
+            learning_rate=0.11651199016626823,
+            max_depth=16,
+            n_estimators=75,
+            random_state=GT_ID,
+            enable_categorical=True,
         )
     else:
         xgb_class = XGBClassifier(
-            objective="multi:softmax", 
-            num_class=7,  # Number of bins
-            random_state=GT_ID, 
-            learning_rate=1, 
+            objective="multi:softmax",
+            learning_rate=0.11651199016626823,
+            max_depth=16,
+            n_estimators=75,
+            random_state=GT_ID,
         )
     param_grid = {  'max_depth': [3, 5, 10],
                     'min_samples_split': [2, 5],
@@ -438,7 +498,7 @@ def train_and_evaluate_dt(X_train, y_train, X_test, y_test):
     
     # Fit models
     models = {
-        # "Default Decision Tree": dt,
+        "Default Decision Tree": dt,
         # "Bagging": bagging,
         # "Boosting with Decision Tree": boosting,
         # "XGBoost": xgboost_model,
@@ -455,67 +515,94 @@ def train_and_evaluate_dt(X_train, y_train, X_test, y_test):
     # X_train, y_train = smote.fit_resample(X_train, y_train)
     for model_name, model in models.items():
         print(model)
-        if "XGBoost_class" in model_name:
-            y_train = pd.cut(y_train, bins=[0, 300, 500, 1000, 1300, 2000, 3000, np.inf], labels=[0, 1, 2, 3, 4, 5, 6])
-            y_test = pd.cut(y_test, bins=[0, 300, 500, 1000, 1300, 2000, 3000, np.inf], labels=[0, 1, 2, 3, 4, 5, 6])
-
         start_time = time.time()
-        print(X_train)
-        print(y_train)
-        model.fit(X_train, y_train, )
-        y_pred = model.predict(X_test)
+        if "XGBoost_class" in model_name:
+            # bins = [0, 100, 400, 900, 1600, 2500, 3000, 4000,5000,np.inf]
+            # bin_labels = range(len(bins) - 1)
+            # binned_y_train = pd.cut(y_train, bins=bins, labels=bin_labels)
+
+            # bin_modes = {}
+            # for bin_label in bin_labels:
+            #     mode_value = y_train[binned_y_train == bin_label].mode()[0]  # Mode of original y_train in the bin
+            #     bin_modes[bin_label] = mode_value
+            # model.fit(X_train, binned_y_train)
+            # binned_y_pred = model.predict(X_test)
+            # y_pred = np.array([bin_modes[pred] for pred in binned_y_pred])
+            # Define bins and bin labels
+            bins = [0, 100, 400, 900, 1600, 2500, 3000, 4000, 5000, np.inf]
+            bin_labels = range(len(bins) - 1)
+            binned_y_train = pd.cut(y_train, bins=bins, labels=bin_labels)
+            bin_distributions = {}
+            for bin_label in bin_labels:
+                bin_values = y_train[binned_y_train == bin_label]
+                value_counts = bin_values.value_counts(normalize=True)  # Relative frequencies
+                bin_distributions[bin_label] = value_counts
+            model.fit(X_train, binned_y_train)
+            binned_y_pred = model.predict(X_test)
+            y_pred = []
+            for pred in binned_y_pred:
+                bin_dist = bin_distributions[pred]
+                sampled_value = np.random.choice(bin_dist.index, p=bin_dist.values)
+                y_pred.append(sampled_value)
+            y_pred = np.array(y_pred)
+
+        else:
+            model.fit(X_train, y_train)
+            y_pred = model.predict(X_test)
 
 
         if "XGBoost_class" in model_name:
-            accuracy = accuracy_score(y_test, y_pred)
+            binned_y_test = pd.cut(y_test, bins=bins, labels=bin_labels)
+            accuracy = accuracy_score(binned_y_test, binned_y_pred)
             print(f"Accuracy: {accuracy * 100:.2f}%")
             print("Classification Report:")
-            print(classification_report(y_test, y_pred))
+            print(classification_report(binned_y_test, binned_y_pred))
         else:
             if np.any(np.isnan(y_test)):
                 print("Warning: NaN values found in y_test")
             if np.any(np.isnan(y_pred)):
                 print("Warning: NaN values found in y_pred")
 
-            mse = mean_squared_error(y_test, y_pred)
-            mae = mean_absolute_error(y_test, y_pred)
-            r2 = r2_score(y_test, y_pred)
-            rmse = np.sqrt(mean_squared_error(y_test, y_pred))
-            rmlse = np.sqrt(mean_squared_error(np.log1p(y_test), np.log1p(y_pred)))
-            model_params = model.get_params() if hasattr(model, 'get_params') else None
+        mse = mean_squared_error(y_test, y_pred)
+        mae = mean_absolute_error(y_test, y_pred)
+        r2 = r2_score(y_test, y_pred)
+        rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+        rmlse = np.sqrt(mean_squared_error(np.log1p(y_test), np.log1p(y_pred)))
+        model_params = model.get_params() if hasattr(model, 'get_params') else None
 
-            results[model_name] = {
-                "MSE": mse,
-                "MAE": mae,
-                "RMSE": rmse,
-                "RMLSE": rmlse,
-                "R2": r2,
-                "runtime": time.time() - start_time,
-                'params': model_params,
-            }
-            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            model_path = os.path.join(
-                MODELS_OUTDIR,
-                f"{model_name}_{timestamp}.joblib"
-            )
-            # joblib.dump(model, model_path)
-            # print(f"Model {model_name} saved at {model_path}")
-            log_entry = (
-                f"Model: {model_name}\n"
-                f"Saved Path: {model_path}\n"
-                f"Timestamp: {timestamp}\n"
-                f"MSE: {results[model_name]['MSE']:.4f}\n"
-                f"MAE: {results[model_name]['MAE']:.4f}\n"
-                f"RMSE: {results[model_name]['RMSE']:.4f}\n"
-                f"RMLSE: {results[model_name]['RMLSE']:.4f}\n"
-                f"R2: {results[model_name]['R2']:.4f}\n"
-                f"Runtime: {results[model_name]['runtime']:.2f} seconds\n"
-                f"Model Hyperparameters: {model_params}\n"  
-                f"{'#' * 50}\n"
-            )
-            # Append the log entry to the text file
-            with open(MODEL_ALL_LOG_FILE, "a") as log_file:
-                log_file.write(log_entry)
+        results[model_name] = {
+            "MSE": mse,
+            "MAE": mae,
+            "RMSE": rmse,
+            "RMLSE": rmlse,
+            "R2": r2,
+            "runtime": time.time() - start_time,
+            'params': model_params,
+        }
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        model_path = os.path.join(
+            MODELS_OUTDIR,
+            f"{model_name}_{timestamp}.joblib"
+        )
+        # joblib.dump(model, model_path)
+        # print(f"Model {model_name} saved at {model_path}")
+        log_entry = (
+            f"Model: {model_name}\n"
+            f"Saved Path: {model_path}\n"
+            f"Timestamp: {timestamp}\n"
+            f"MSE: {results[model_name]['MSE']:.4f}\n"
+            f"MAE: {results[model_name]['MAE']:.4f}\n"
+            f"RMSE: {results[model_name]['RMSE']:.4f}\n"
+            f"RMLSE: {results[model_name]['RMLSE']:.4f}\n"
+            f"R2: {results[model_name]['R2']:.4f}\n"
+            f"Runtime: {results[model_name]['runtime']:.2f} seconds\n"
+            f"Model Hyperparameters: {model_params}\n"  
+            f"{'#' * 50}\n"
+        )
+        # Append the log entry to the text file
+        with open(MODEL_ALL_LOG_FILE, "a") as log_file:
+            log_file.write(log_entry)
+        ###############
         # evaluate_metrics_in_context(y_test, y_pred, model_name)
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         if len(y_test) > 10000:
@@ -572,7 +659,18 @@ def check_etl():
     # plots.plot_pca(X,y, f"{AGGREGATED_OUTDIR}/{timestamp}_pca.png" )
     # plots.plot_ica(X,y, f"{AGGREGATED_OUTDIR}/{timestamp}_ica.png" )
     # etl.graph_raw_data(X_test, y_test)
-    # plots.analyze_feature_importance(X_train, y_train)
+    # plots.analyze_feature_importance(X_train, y_train, f"")
+
+    # bin_edges = [0, 200, 400, 900, 1200, 1600, 2000, 2500, 3000, np.inf]
+    # bin_labels = pd.cut(y_train, bins=bin_edges, labels=False, right=False)  
+    # for bin_index in range(len(bin_edges) - 1):  #
+    #     bin_mask = (bin_labels == bin_index)  
+    #     X_train_bin = X_train[bin_mask]
+    #     y_train_bin = y_train[bin_mask]
+    #     if X_train_bin.shape[0] == 0:
+    #         continue
+    #     print(f"Analyzing bin {bin_index} with {X_train_bin.shape[0]} samples")
+    #     plots.analyze_feature_importance(X_train_bin, y_train_bin, f"_bin_{bin_index}")
     # plots.analyze_dim_reduc(X_train,y_train,X_test, y_test)
     
     print("======> Data verification complete")
@@ -670,8 +768,9 @@ def main():
         # dt_result_save_file = f"{Y_PRED_OUTDIR}/dt_results.pkl"
         # if not os.path.exists(dt_result_save_file) or os.path.exists(dt_result_save_file):
         # brute_force_binning(X_train,y_train)
-        get_bayes_opt(X_train, y_train)
+        # get_bayes_opt(X_train, y_train)
         # results = train_and_evaluate_dt(X_train, y_train, X_test, y_test)
+        results = train_and_evaluate_svm(X_train, y_train, X_test, y_test)
             # save_results(results, f"{Y_PRED_OUTDIR}/dt_results.pkl")
         
     ####### Torch models (just MPL for now)

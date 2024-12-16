@@ -1721,7 +1721,7 @@ def plot_ica(X_df,Y_df,save_path):
     print(f"ICA plot saved at: {save_path}")
 
 
-def analyze_feature_importance(X_train, y_train):
+def analyze_feature_importance(X_train, y_train, tag):
     # 1. Decision Tree Feature Importance
     dt_model = DecisionTreeRegressor(random_state=GT_ID)
     dt_model.fit(X_train, y_train)
@@ -1772,7 +1772,7 @@ def analyze_feature_importance(X_train, y_train):
     plt.tight_layout()
 
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    save_path = f"{AGGREGATED_OUTDIR}/{timestamp}_feature_importance.png"
+    save_path = f"{AGGREGATED_OUTDIR}/{timestamp}_feature_importance{tag}.png"
     plt.savefig(save_path)
     plt.close()  #
     # print(feature_importance_df)

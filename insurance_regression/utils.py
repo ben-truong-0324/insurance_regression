@@ -677,7 +677,7 @@ def objective(trial, X_train, y_train):
         [0, 100, 400, 900, 1600, 2500, 3000, np.inf],
         [0, 200, 400, 900,1200, 1600,2000 ,2500, 3000, np.inf],
         [0, 400, 800, 1200, 2000, 3000, 4000, np.inf],
-        [0, 100, 200,350,650,800, 1000, 1100,1200, 1300, 1600, ,2000, 2500, 3200, 4000, np.inf],
+        [0, 100, 200,350,650,800, 1000, 1100,1200, 1300, 1600 ,2000, 2500, 3200, 4000, np.inf],
     ]
 
     # Split dataset
@@ -692,9 +692,9 @@ def objective(trial, X_train, y_train):
     y_val_binned = binning_transformer.transform(y_val_split)
 
     # Model hyperparameters
-    learning_rate = trial.suggest_float("learning_rate", 0.05, .8)
-    max_depth = trial.suggest_int("max_depth", 10, 35)
-    n_estimators = trial.suggest_int("n_estimators", 50, 150, step=25)
+    learning_rate = trial.suggest_float("learning_rate", 0.5, 2)
+    max_depth = trial.suggest_int("max_depth", 35, 60)
+    n_estimators = trial.suggest_int("n_estimators", 100, 250, step=50)
 
     # Train model
     model = XGBClassifier(
@@ -713,6 +713,9 @@ def objective(trial, X_train, y_train):
     return score
 
 # {'bins': [0, 100, 400, 900, 1600, 2500, 3000, inf], 'learning_rate': 0.11651199016626823, 'max_depth': 16, 'n_estimators': 75}. .364
+
+# Best Params: {'bins': [0, 100, 400, 900, 1600, 2500, 3000, inf], 'learning_rate': 0.1506431538401803, 'max_depth': 32, 'n_estimators': 100}
+# Best Accuracy: 0.3603535828474704
 def get_bayes_opt(X_train, y_train):
 
     # Optimize
