@@ -27,6 +27,8 @@ import math
 import itertools
 import joblib
 import xgboost as xgb
+from xgboost import XGBClassifier
+
 from scipy.stats import gaussian_kde
 from scipy.stats import ttest_1samp
 from imblearn.over_sampling import SMOTE
@@ -402,6 +404,8 @@ def evaluate_metrics_in_context(y_true, y_pred, model_name, file_path=f"{TXT_OUT
 
 # Function to train and evaluate the Decision Tree Regressor with different configurations
 def train_and_evaluate_dt(X_train, y_train, X_test, y_test):
+    
+
     # Initialize models
     dt = DecisionTreeRegressor(random_state=GT_ID)
     boosting = GradientBoostingRegressor(n_estimators=N_ESTIMATOR, learning_rate=0.001, random_state=GT_ID)
@@ -413,7 +417,20 @@ def train_and_evaluate_dt(X_train, y_train, X_test, y_test):
     extra_trees = ExtraTreesRegressor(n_estimators=N_ESTIMATOR, random_state=GT_ID)
     hist_gb = HistGradientBoostingRegressor(max_iter=N_ESTIMATOR, random_state=GT_ID)
     
-    
+    if any(X_train.dtypes == 'category'):
+        xgb_class = XGBClassifier(
+            objective="multi:softmax", 
+            num_class=7,  # Number of bins
+            random_state=GT_ID, 
+            enable_categorical=True
+        )
+    else:
+        xgb_class = XGBClassifier(
+            objective="multi:softmax", 
+            num_class=7,  # Number of bins
+            random_state=GT_ID, 
+            learning_rate=1, 
+        )
     param_grid = {  'max_depth': [3, 5, 10],
                     'min_samples_split': [2, 5],
                     'min_samples_leaf': [1, 2]}
@@ -421,33 +438,84 @@ def train_and_evaluate_dt(X_train, y_train, X_test, y_test):
     
     # Fit models
     models = {
-        "Default Decision Tree": dt,
+        # "Default Decision Tree": dt,
         # "Bagging": bagging,
         # "Boosting with Decision Tree": boosting,
-        "XGBoost": xgboost_model,
+        # "XGBoost": xgboost_model,
+        "XGBoost_class": xgb_class,
         # "Random Forest": rf,
         # "Extra Trees": extra_trees,
         # "Histogram-based Gradient Boosting": hist_gb,
         # "Tuned Decision Tree (GridSearch)": grid_search,
     }
-    print(min(y_test))
-    print(min(y_train))
-    print("done")
+    
     results = {}
-    print("getting smote")
-    smote = SMOTE(sampling_strategy='auto', random_state=42)
-    X_train, y_train = smote.fit_resample(X_train, y_train)
+    # print("getting smote")
+    # smote = SMOTE(sampling_strategy='auto', random_state=42)
+    # X_train, y_train = smote.fit_resample(X_train, y_train)
     for model_name, model in models.items():
         print(model)
+        if "XGBoost_class" in model_name:
+            y_train = pd.cut(y_train, bins=[0, 300, 500, 1000, 1300, 2000, 3000, np.inf], labels=[0, 1, 2, 3, 4, 5, 6])
+            y_test = pd.cut(y_test, bins=[0, 300, 500, 1000, 1300, 2000, 3000, np.inf], labels=[0, 1, 2, 3, 4, 5, 6])
+
         start_time = time.time()
+        print(X_train)
+        print(y_train)
         model.fit(X_train, y_train, )
         y_pred = model.predict(X_test)
 
-        accuracy = accuracy_score(y_test, y_pred)
-        print(f"Accuracy: {accuracy * 100:.2f}%")
-        print("Classification Report:")
-        print(classification_report(y_test, y_pred))
 
+        if "XGBoost_class" in model_name:
+            accuracy = accuracy_score(y_test, y_pred)
+            print(f"Accuracy: {accuracy * 100:.2f}%")
+            print("Classification Report:")
+            print(classification_report(y_test, y_pred))
+        else:
+            if np.any(np.isnan(y_test)):
+                print("Warning: NaN values found in y_test")
+            if np.any(np.isnan(y_pred)):
+                print("Warning: NaN values found in y_pred")
+
+            mse = mean_squared_error(y_test, y_pred)
+            mae = mean_absolute_error(y_test, y_pred)
+            r2 = r2_score(y_test, y_pred)
+            rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+            rmlse = np.sqrt(mean_squared_error(np.log1p(y_test), np.log1p(y_pred)))
+            model_params = model.get_params() if hasattr(model, 'get_params') else None
+
+            results[model_name] = {
+                "MSE": mse,
+                "MAE": mae,
+                "RMSE": rmse,
+                "RMLSE": rmlse,
+                "R2": r2,
+                "runtime": time.time() - start_time,
+                'params': model_params,
+            }
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            model_path = os.path.join(
+                MODELS_OUTDIR,
+                f"{model_name}_{timestamp}.joblib"
+            )
+            # joblib.dump(model, model_path)
+            # print(f"Model {model_name} saved at {model_path}")
+            log_entry = (
+                f"Model: {model_name}\n"
+                f"Saved Path: {model_path}\n"
+                f"Timestamp: {timestamp}\n"
+                f"MSE: {results[model_name]['MSE']:.4f}\n"
+                f"MAE: {results[model_name]['MAE']:.4f}\n"
+                f"RMSE: {results[model_name]['RMSE']:.4f}\n"
+                f"RMLSE: {results[model_name]['RMLSE']:.4f}\n"
+                f"R2: {results[model_name]['R2']:.4f}\n"
+                f"Runtime: {results[model_name]['runtime']:.2f} seconds\n"
+                f"Model Hyperparameters: {model_params}\n"  
+                f"{'#' * 50}\n"
+            )
+            # Append the log entry to the text file
+            with open(MODEL_ALL_LOG_FILE, "a") as log_file:
+                log_file.write(log_entry)
         # evaluate_metrics_in_context(y_test, y_pred, model_name)
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         if len(y_test) > 10000:
@@ -466,52 +534,6 @@ def train_and_evaluate_dt(X_train, y_train, X_test, y_test):
             plots.plot_predictions( y_test, y_pred,1, model_name,
                     f"{AGGREGATED_OUTDIR}/{timestamp}_pred_actual_diff_{model_name}.png",
                     f"{AGGREGATED_OUTDIR}/{timestamp}_pred_actual_hist_{model_name}.png")
-
-        # Calculate losses
-        if np.any(np.isnan(y_test)):
-            print("Warning: NaN values found in y_test")
-        if np.any(np.isnan(y_pred)):
-            print("Warning: NaN values found in y_pred")
-
-        mse = mean_squared_error(y_test, y_pred)
-        mae = mean_absolute_error(y_test, y_pred)
-        r2 = r2_score(y_test, y_pred)
-        rmse = np.sqrt(mean_squared_error(y_test, y_pred))
-        rmlse = np.sqrt(mean_squared_error(np.log1p(y_test), np.log1p(y_pred)))
-        model_params = model.get_params() if hasattr(model, 'get_params') else None
-
-        results[model_name] = {
-            "MSE": mse,
-            "MAE": mae,
-            "RMSE": rmse,
-            "RMLSE": rmlse,
-            "R2": r2,
-            "runtime": time.time() - start_time,
-            'params': model_params,
-        }
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        model_path = os.path.join(
-            MODELS_OUTDIR,
-            f"{model_name}_{timestamp}.joblib"
-        )
-        # joblib.dump(model, model_path)
-        # print(f"Model {model_name} saved at {model_path}")
-        log_entry = (
-            f"Model: {model_name}\n"
-            f"Saved Path: {model_path}\n"
-            f"Timestamp: {timestamp}\n"
-            f"MSE: {results[model_name]['MSE']:.4f}\n"
-            f"MAE: {results[model_name]['MAE']:.4f}\n"
-            f"RMSE: {results[model_name]['RMSE']:.4f}\n"
-            f"RMLSE: {results[model_name]['RMLSE']:.4f}\n"
-            f"R2: {results[model_name]['R2']:.4f}\n"
-            f"Runtime: {results[model_name]['runtime']:.2f} seconds\n"
-            f"Model Hyperparameters: {model_params}\n"  
-            f"{'#' * 50}\n"
-        )
-        # Append the log entry to the text file
-        with open(MODEL_ALL_LOG_FILE, "a") as log_file:
-            log_file.write(log_entry)
     return results
 
 # Function to train and evaluate the Decision Tree Regressor with different configurations
@@ -545,7 +567,14 @@ def check_etl():
     X, y = etl.get_data()
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=.1, random_state=GT_ID)
     test_data_etl_input_check(X,y,X_train, X_test, y_train, y_test, show = True)
-    etl.graph_raw_data(X_test, y_test)
+    ####
+    # timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    # plots.plot_pca(X,y, f"{AGGREGATED_OUTDIR}/{timestamp}_pca.png" )
+    # plots.plot_ica(X,y, f"{AGGREGATED_OUTDIR}/{timestamp}_ica.png" )
+    # etl.graph_raw_data(X_test, y_test)
+    # plots.analyze_feature_importance(X_train, y_train)
+    # plots.analyze_dim_reduc(X_train,y_train,X_test, y_test)
+    
     print("======> Data verification complete")
     return X,y,X_train, X_test, y_train, y_test 
 
@@ -636,11 +665,13 @@ def main():
     print("hello")
     if do_skl_train:
         print("starting skl models")
-        y_train = pd.cut(y_train, bins=[0, 300,500, 1000,1300, 2000, 3000, np.inf], labels=[0, 1, 2, 3, 4,5,6])
-        y_test = pd.cut(y_test, bins=[0, 300,500, 1000,1300, 2000, 3000, np.inf], labels=[0, 1, 2, 3, 4,5,6])
+        # y_train = pd.cut(y_train, bins=[0, 300,500, 1000,1300, 2000, 3000, np.inf], labels=[0, 1, 2, 3, 4,5,6])
+        # y_test = pd.cut(y_test, bins=[0, 300,500, 1000,1300, 2000, 3000, np.inf], labels=[0, 1, 2, 3, 4,5,6])
         # dt_result_save_file = f"{Y_PRED_OUTDIR}/dt_results.pkl"
         # if not os.path.exists(dt_result_save_file) or os.path.exists(dt_result_save_file):
-        results = train_and_evaluate_dt(X_train, y_train, X_test, y_test)
+        # brute_force_binning(X_train,y_train)
+        get_bayes_opt(X_train, y_train)
+        # results = train_and_evaluate_dt(X_train, y_train, X_test, y_test)
             # save_results(results, f"{Y_PRED_OUTDIR}/dt_results.pkl")
         
     ####### Torch models (just MPL for now)

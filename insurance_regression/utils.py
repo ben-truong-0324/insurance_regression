@@ -16,11 +16,15 @@ from src.models import *
 from src.models_reg import *
 from insurance_regression.config import *
 import insurance_regression.plots as plots
+from sklearn.model_selection import RandomizedSearchCV, StratifiedKFold
 
 import joblib
+import optuna
 
 import math
 from sklearn.preprocessing import LabelEncoder
+from sklearn.pipeline import Pipeline
+from xgboost import XGBClassifier
 
 
 from scipy.stats import ttest_1samp
@@ -567,3 +571,154 @@ def compute_weights(y_train):
             weights[i] = 3.0  # Increase weight for values near 50 or 2500
     
     return weights
+
+
+
+# Custom Binning Transformer
+class BinningTransformer:
+    def __init__(self, bins):
+        self.bins = bins
+
+    def transform(self, y):
+        # print("Original y before binning:", np.unique(y))
+        y = np.ravel(y)  # Ensure 1D array
+        bin_labels = pd.cut(y, bins=self.bins, labels=range(len(self.bins) - 1))
+        bin_labels = bin_labels.astype(int)  # Ensure integer labels
+        # print("Transformed bin labels (integers):", np.unique(bin_labels))
+        return bin_labels
+
+def brute_force_binning(X_train, y_train):
+    print("Shapes of X_train and y_train:", X_train.shape, y_train.shape)
+
+    # Define parameter grid
+    binning_strategies = [
+        # [0, 300, 500, 1000, 1300, 2000, 3000, np.inf],
+        # [0, 200, 400, 800, 1200, 1600, 2000, 3000, np.inf],
+        # [0, 250, 500, 750, 1000, 1500, 2000, 2500, 3000, np.inf],
+        # [0, 100, 500, 900, 1300, 1700, 2100, 2600, 3100, np.inf],
+        # [0, 150, 300, 600, 1200, 1800, 2500, 3200, np.inf],
+        [0, 400, 800, 1200, 2000, 3000, 4000, np.inf],
+        # [0, 500, 1000, 1500, 2000, 2500, 3000, np.inf],
+        # [0, 100, 300, 600, 900, 1200, 1800, 2400, 3000, np.inf],
+        # [0, 200, 400, 600, 800, 1000, 1400, 1800, 2200, 3000, np.inf],
+        # [0, 100, 250, 500, 1000, 2000, 3000, np.inf],
+        # [0, 200, 450, 700, 950, 1200, 1700, 2300, 2900, np.inf],
+        # [0, 100, 300, 500, 800, 1200, 2000, 3000, np.inf],
+        # [0, 250, 500, 1000, 1500, 2000, 3000, np.inf],
+        # [0, 50, 100, 250, 500, 1000, 1500, 2000, 3000, np.inf],
+        # [0, 200, 400, 600, 800, 1200, 1600, 2000, 3000, np.inf],
+        # [0, 300, 600, 900, 1200, 1500, 1800, 2100, 2400, 3000, np.inf],
+        # [0, 200, 500, 1000, 1500, 2000, 2500, 3000, np.inf],
+        # [0, 150, 400, 700, 1000, 1400, 1800, 2200, 3000, np.inf],
+        # [0, 500, 1000, 2000, 3000, 4000, np.inf],
+        # [0, 200, 600, 1200, 1800, 2400, 3000, np.inf],
+        [0, 100, 400, 900, 1600, 2500, 3000, np.inf],
+        [0, 200, 400, 900,1200, 1600,2000 ,2500, 3000, np.inf],
+    ]
+    learning_rates = [0.1,.25,.5]
+    max_depths = [15,20,25]
+    n_estimators = [50 ]
+
+    # Splitting training data for evaluation
+    X_train_split, X_val_split, y_train_split, y_val_split = train_test_split(
+        X_train, y_train, test_size=0.2, random_state=GT_ID
+    )
+
+    best_score = 0
+    best_params = {}
+
+    # Brute-force grid search
+    for bins in binning_strategies:
+        binning_transformer = BinningTransformer(bins=bins)
+        y_train_binned = binning_transformer.transform(y_train_split)
+        y_val_binned = binning_transformer.transform(y_val_split)
+
+        for learning_rate in learning_rates:
+            for max_depth in max_depths:
+                for n_estimator in n_estimators:
+                    print(
+                        f"Testing bins={bins}, learning_rate={learning_rate}, "
+                        f"max_depth={max_depth}, n_estimators={n_estimator}"
+                    )
+
+                    # Train the model
+                    model = XGBClassifier(
+                        objective="multi:softmax",
+                        learning_rate=learning_rate,
+                        max_depth=max_depth,
+                        n_estimators=n_estimator,
+                        random_state=42
+                    )
+                    model.fit(X_train_split, y_train_binned)
+
+                    # Predict and evaluate
+                    y_val_pred = model.predict(X_val_split)
+                    score = accuracy_score(y_val_binned, y_val_pred)
+
+                    print(f"Accuracy: {score:.4f}")
+
+                    # Update best parameters if this configuration is better
+                    if score > best_score:
+                        best_score = score
+                        best_params = {
+                            "bins": bins,
+                            "learning_rate": learning_rate,
+                            "max_depth": max_depth,
+                            "n_estimators": n_estimator,
+                        }
+
+    print("Best Parameters:", best_params)
+    print("Best Accuracy:", best_score)
+
+
+def objective(trial, X_train, y_train):
+    # Define binning strategies to choose from
+    binning_strategies = [
+        [0, 100, 400, 900, 1600, 2500, 3000, np.inf],
+        [0, 200, 400, 900,1200, 1600,2000 ,2500, 3000, np.inf],
+        [0, 400, 800, 1200, 2000, 3000, 4000, np.inf],
+        [0, 100, 200,350,650,800, 1000, 1100,1200, 1300, 1600, ,2000, 2500, 3200, 4000, np.inf],
+    ]
+
+    # Split dataset
+    X_train_split, X_val_split, y_train_split, y_val_split = train_test_split(
+        X_train, y_train, test_size=0.2, random_state=42
+    )
+
+    # Sampling binning strategy
+    bins = trial.suggest_categorical("bins", binning_strategies)
+    binning_transformer = BinningTransformer(bins=bins)
+    y_train_binned = binning_transformer.transform(y_train_split)
+    y_val_binned = binning_transformer.transform(y_val_split)
+
+    # Model hyperparameters
+    learning_rate = trial.suggest_float("learning_rate", 0.05, .8)
+    max_depth = trial.suggest_int("max_depth", 10, 35)
+    n_estimators = trial.suggest_int("n_estimators", 50, 150, step=25)
+
+    # Train model
+    model = XGBClassifier(
+        objective="multi:softmax",
+        learning_rate=learning_rate,
+        max_depth=max_depth,
+        n_estimators=n_estimators,
+        random_state=GT_ID,
+    )
+    model.fit(X_train_split, y_train_binned)
+
+    # Evaluate
+    y_val_pred = model.predict(X_val_split)
+    score = accuracy_score(y_val_binned, y_val_pred)
+
+    return score
+
+# {'bins': [0, 100, 400, 900, 1600, 2500, 3000, inf], 'learning_rate': 0.11651199016626823, 'max_depth': 16, 'n_estimators': 75}. .364
+def get_bayes_opt(X_train, y_train):
+
+    # Optimize
+    study = optuna.create_study(direction="maximize")
+    study.optimize(lambda trial: objective(trial, X_train, y_train), n_trials=50)
+
+    # Best results
+    print("Best Params:", study.best_params)
+    print("Best Accuracy:", study.best_value)

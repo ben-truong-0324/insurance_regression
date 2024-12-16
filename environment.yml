@@ -18,5 +18,6 @@ dependencies:
   - pip:
   - xgboost
   - imbalanced-learn
+  - optuna
     # - scikit-learn 
     # - bayesian-optimization

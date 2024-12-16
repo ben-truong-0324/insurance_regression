@@ -218,7 +218,7 @@ def encode_and_save_labels(df, categorical_columns):
 
 def do_ul_cluster(X_df):
     X_og = X_df.drop(columns=['Premium Amount']).copy()
-    ul_cluster_count = 5
+    ul_cluster_count = 7
 
     print("kmeans")
     kmeans = KMeans(n_clusters=ul_cluster_count, random_state=GT_ID)
@@ -231,7 +231,7 @@ def do_ul_cluster(X_df):
     X_df['gmm_clus'] = gmm_clus
 
     print("dbscan")
-    dbscan = DBSCAN(eps=0.5, min_samples=5)
+    dbscan = DBSCAN(eps=1.0, min_samples=3)
     dbscan_clus = dbscan.fit_predict(X_og)
     X_df['dbscan_clus'] = dbscan_clus
     
@@ -293,9 +293,7 @@ def get_data():
         print("=" * 120)
         Y_df = df['Premium Amount']  # Target variable
         X_df = df.drop(columns=[ 'Premium Amount'])
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        plots.plot_pca(X_df,Y_df, f"{AGGREGATED_OUTDIR}/{timestamp}_pca.png" )
-        plots.plot_ica(X_df,Y_df, f"{AGGREGATED_OUTDIR}/{timestamp}_ica.png" )
+        
        
 
     else: 

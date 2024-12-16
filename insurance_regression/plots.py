@@ -12,6 +12,19 @@ from sklearn.decomposition import FastICA
 from sklearn.decomposition import PCA
 
 from insurance_regression.config import *
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.random_projection import GaussianRandomProjection
+
+from xgboost import XGBRegressor
+from xgboost import XGBClassifier
+
+
+from sklearn.inspection import permutation_importance
+from sklearn.metrics import accuracy_score, f1_score, log_loss
+from matplotlib import cm  # For color maps
+import seaborn as sns
+import datetime
 
 def plot_fitness_iterations(nn_models, algorithm_names):
     plt.figure(figsize=(12, 6))
@@ -820,16 +833,7 @@ def plot_purity_score_of_c_cluster(purity_scores, outpath, tag):
         plt.close()
 
 
-import matplotlib.pyplot as plt
-import numpy as np
 
-
-
-from matplotlib import cm  # For color maps
-
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
 
 def plot_3d_comparison(clustered_reduced_results, color_map="RdYlGn", outpath=None):
     save_dir = outpath + f"/comparison_accuracy_f1.png"
@@ -1686,7 +1690,7 @@ def plot_pca(X_df,Y_df,save_path):
     plt.tight_layout()
     plt.savefig(save_path)
     plt.close()  # Close the plot to release memory
-    print(f"Loss plot saved at: {save_path}")
+    print(f"PCA plot saved at: {save_path}")
 
 def plot_ica(X_df,Y_df,save_path):
     Y_binned = pd.cut(Y_df, bins=[0, 500, 1000, 2000, 4000, np.inf], labels=[0, 1, 2, 3, 4])
@@ -1714,4 +1718,186 @@ def plot_ica(X_df,Y_df,save_path):
     plt.tight_layout()
     plt.savefig(save_path)
     plt.close()  # Close the plot to release memory
-    print(f"Loss plot saved at: {save_path}")
+    print(f"ICA plot saved at: {save_path}")
+
+
+def analyze_feature_importance(X_train, y_train):
+    # 1. Decision Tree Feature Importance
+    dt_model = DecisionTreeRegressor(random_state=GT_ID)
+    dt_model.fit(X_train, y_train)
+    dt_importance = dt_model.feature_importances_
+    
+    # 2. Random Forest Feature Importance
+    rf_model = RandomForestRegressor(n_estimators=N_ESTIMATOR, random_state=GT_ID)
+    rf_model.fit(X_train, y_train)
+    rf_importance = rf_model.feature_importances_
+    
+    # 3. XGBoost Feature Importance
+    xgb_model = XGBRegressor(random_state=GT_ID)
+    xgb_model.fit(X_train, y_train)
+    xgb_importance = xgb_model.feature_importances_
+    
+    # 4. Permutation Importance (Model-Agnostic)
+    perm_importance = permutation_importance(
+        xgb_model, X_train, y_train, 
+        n_repeats=N_ESTIMATOR, 
+        random_state=GT_ID,
+    )
+    
+    # Create a DataFrame to compare importances
+    feature_importance_df = pd.DataFrame({
+        'Feature': X_train.columns,
+        'Decision Tree Importance': dt_importance,
+        'Random Forest Importance': rf_importance,
+        'XGBoost Importance': xgb_importance,
+        'Permutation Importance': perm_importance.importances_mean
+    })
+    
+    feature_importance_df = feature_importance_df.sort_values('XGBoost Importance', ascending=False)
+    
+    plt.figure(figsize=(12, 8))
+    importance_melted = feature_importance_df.melt(
+        id_vars=['Feature'], 
+        var_name='Importance Type', 
+        value_name='Importance Value'
+    )
+    sns.barplot(
+        x='Feature', 
+        y='Importance Value', 
+        hue='Importance Type', 
+        data=importance_melted
+    )
+    plt.title('Feature Importance Comparison')
+    plt.xticks(rotation=90)
+    plt.tight_layout()
+
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    save_path = f"{AGGREGATED_OUTDIR}/{timestamp}_feature_importance.png"
+    plt.savefig(save_path)
+    plt.close()  #
+    # print(feature_importance_df)
+    print(f"Feature Importance plot saved at: {save_path}")
+    
+def analyze_dim_reduc(X_train,y_train,X_test, y_test):
+    y_train_binned = pd.cut(y_train, bins=[0, 300, 500, 1000, 1300, 2000, 3000, np.inf], labels=[0, 1, 2, 3, 4, 5, 6])
+    y_test = pd.cut(y_test, bins=[0, 300, 500, 1000, 1300, 2000, 3000, np.inf], labels=[0, 1, 2, 3, 4, 5, 6])
+
+    # Initialize results storage
+    methods = ["PCA", "ICA", "Random Projection"]
+    results = {method: {"accuracy": []} for method in methods}
+    dims = [0,2,3, 4,5]
+
+    for n_components in dims:
+        print(f"Evaluating with {n_components} components...")
+        # PCA
+        if any(X_train.dtypes == 'category'):
+            xgb = XGBClassifier(
+                objective="multi:softmax", 
+                num_class=7,  # Number of bins
+                random_state=GT_ID, 
+                enable_categorical=True
+            )
+        else:
+            xgb = XGBClassifier(
+                objective="multi:softmax", 
+                num_class=7,  # Number of bins
+                random_state=GT_ID, 
+                learning_rate=1, 
+            )
+        # if any(X_train.dtypes == 'category'):
+        #     xgb = XGBRegressor(objective="reg:squarederror",random_state=GT_ID,enable_categorical=True,)
+        # else: xgb = XGBRegressor(objective="reg:squarederror",random_state=GT_ID,learning_rate=1, max_depth = 10)
+        print("doing pca")
+        if n_components > 1:
+            pca = PCA(n_components=n_components, random_state=GT_ID)
+            X_train_pca = pca.fit_transform(X_train)
+            xgb.fit(X_train_pca, y_train_binned)
+            y_pred = xgb.predict(pca.transform(X_test))
+        else: 
+            xgb.fit(X_train, y_train_binned)
+            y_pred = xgb.predict(X_test)
+        acc = accuracy_score(y_test, y_pred)
+        results["PCA"]["accuracy"].append(acc)
+        print("donezo with pca")
+
+        # ICA
+        if any(X_train.dtypes == 'category'):
+            xgb = XGBClassifier(
+                objective="multi:softmax", 
+                num_class=7,  # Number of bins
+                random_state=GT_ID, 
+                enable_categorical=True
+            )
+        else:
+            xgb = XGBClassifier(
+                objective="multi:softmax", 
+                num_class=7,  # Number of bins
+                random_state=GT_ID, 
+                learning_rate=1, 
+                # max_depth=10
+            )
+        # if any(X_train.dtypes == 'category'):
+        #     xgb = XGBRegressor(objective="reg:squarederror",random_state=GT_ID,enable_categorical=True,)
+        # else: xgb = XGBRegressor(objective="reg:squarederror",random_state=GT_ID,learning_rate=1, max_depth = 10)
+        if n_components > 1:
+            ica = FastICA(n_components=n_components, random_state=GT_ID)
+            X_train_ica = ica.fit_transform(X_train)
+            xgb.fit(X_train_ica, y_train_binned)
+            y_pred = xgb.predict(ica.transform(X_test))
+        else: 
+            xgb.fit(X_train, y_train_binned)
+            y_pred = xgb.predict(X_test)
+        acc = accuracy_score(y_test, y_pred)
+        results["ICA"]["accuracy"].append(acc)
+        print("done with ica")
+
+        # Random Projection
+        if any(X_train.dtypes == 'category'):
+            xgb = XGBClassifier(
+                objective="multi:softmax", 
+                num_class=7,  # Number of bins
+                random_state=GT_ID, 
+                enable_categorical=True
+            )
+        else:
+            xgb = XGBClassifier(
+                objective="multi:softmax", 
+                num_class=7,  # Number of bins
+                random_state=GT_ID, 
+                learning_rate=1, 
+                # max_depth=10
+            )
+        # if any(X_train.dtypes == 'category'):
+        #     xgb = XGBRegressor(objective="reg:squarederror",random_state=GT_ID,enable_categorical=True,)
+        # else: xgb = XGBRegressor(objective="reg:squarederror",random_state=GT_ID,learning_rate=1, max_depth = 10)
+        if n_components > 1:
+            rp = GaussianRandomProjection(n_components=n_components, random_state=GT_ID)
+            X_train_rp = rp.fit_transform(X_train)
+            xgb.fit(X_train_rp, y_train_binned)
+            y_pred = xgb.predict(rp.transform(X_test))
+        else: 
+            xgb.fit(X_train, y_train_binned)
+            y_pred = xgb.predict(X_test)
+        acc = accuracy_score(y_test, y_pred)
+        results["Random Projection"]["accuracy"].append(acc)
+        print("done with rp")
+
+    # Plot results
+    fig, ax = plt.subplots(figsize=(8, 6))
+
+    for method in methods:
+        ax.plot(dims, results[method]["accuracy"], label=method)
+
+    ax.set_title("XGBoost Accuracy")
+    ax.set_xlabel("Number of Components")
+    ax.set_ylabel("Accuracy")
+    ax.legend()
+
+    plt.tight_layout()
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    save_path = f"{AGGREGATED_OUTDIR}/{timestamp}_dim_reduc_assess.png"
+    plt.savefig(save_path)
+    plt.close()  
+    # print(results)
+    print(f"Dimension Reduction plot saved at: {save_path}")
+    # plt.show()
