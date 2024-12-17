@@ -482,7 +482,7 @@ def reg_hyperparameter_tuning(X,y, device, model_name, do_cv=0):
     param_grid = {
         'hidden_dim': [
                     #    512, 
-            512, 1024, 2048,4800
+            512, 1024, 2048,4800,
                     #    1000,
                     #    20000
                        ],
@@ -496,8 +496,8 @@ def reg_hyperparameter_tuning(X,y, device, model_name, do_cv=0):
             .12, 
               ],
         'weight_decay': [
-                          0.001, 0.005
-                        0.01,0
+                          0.001, 0.005,
+                        0.01,0,
                           ],
     }
     best_eval_func = -np.inf 
