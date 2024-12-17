@@ -63,6 +63,18 @@ class MLPRegression(nn.Module):
         x = torch.relu(self.fc3(x))
         x = self.dropout(x)
         return self.fc4(x)  # Output a continuous value
+        # return torch.relu(self.fc4(x))
+    
+    # def forward(self, x):
+    #     # x = self.fc1(x)  
+    #     x = torch.relu(self.fc1(x))
+    #     x = self.dropout(x)
+    #     x = self.fc2(x)  # Linear transformation
+    #     x = self.dropout(x)
+    #     # x = self.fc3(x)  
+    #     x = torch.relu(self.fc3(x))
+    #     x = self.dropout(x)
+    #     return torch.relu(self.fc4(x))
 
 class CNNRegression(nn.Module):
     def __init__(self, input_dim, output_dim, kernel_size, hidden_dim, dropout_rate):

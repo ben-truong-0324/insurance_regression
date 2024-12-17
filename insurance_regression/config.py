@@ -23,7 +23,7 @@ PROCESSED_TEST_PATH = os.path.join(os.getcwd(), 'data', 'test_processed.csv')
 DATASET_SELECTION = "kaggle_insurance_regression" #kaggle_housing #kaggle_housing_test
 
 EVAL_FUNC_METRIC = 'rmlse' #'mae'  #rmse #'f1' # 'accuracy' 
-N_ESTIMATOR = 32
+N_ESTIMATOR = 5
 
 EVAL_MODELS = [
                 # 'default',

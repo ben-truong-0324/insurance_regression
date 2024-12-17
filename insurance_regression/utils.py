@@ -293,8 +293,8 @@ def train_nn_early_stop_regression(X_train, y_train, X_test, y_test, device,para
             output_dim = y_train.shape[1]  # Number of labels
         else:
             output_dim = len(np.unique(y_train.cpu()))
-    max_epochs = 60
-    patience = 5
+    max_epochs = 50
+    patience = 6
     # Create DataLoaders for training and testing
 
 
@@ -393,9 +393,29 @@ def train_nn_early_stop_regression(X_train, y_train, X_test, y_test, device,para
     model.eval()
     with torch.no_grad():
         for batch_X, batch_y in test_loader:
-            batch_outputs = model(batch_X.to(device))
+            batch_outputs = model(batch_X.to(device)).squeeze()
             outputs_list.append(batch_outputs.cpu())  # Move outputs back to CPU to free GPU memory
     outputs = torch.cat(outputs_list, dim=0).cpu().numpy()
+    outputs = np.abs(outputs)
+
+    # Debugging outputs and y_test
+    def debug_tensor_info(tensor, name):
+        print(f"Debug info for {name}:")
+        print(f"Shape: {tensor.shape}")
+        print(f"Min: {tensor.min()}, Max: {tensor.max()}, Mean: {tensor.mean()}")
+        print(f"NaN count: {np.isnan(tensor).sum()}")
+
+    debug_tensor_info(outputs, "outputs")
+    debug_tensor_info(y_test, "y_test")
+
+    # Fix negative values in outputs
+    if (outputs < 0).any():
+        print("Detected negative values in outputs, clipping to small positive values.")
+        outputs = np.clip(outputs, a_min=1e-6, a_max=None)  # Replace negatives with small positive values
+
+    if (y_test < 0).any():
+        raise ValueError("y_test contains negative values, check your data.")
+
 
 
     mse = mean_squared_error(y_test, outputs)
@@ -420,12 +440,14 @@ def do_plot_preds_of_fold(y_test, y_pred, model_name, fold):
             print(e)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         plots.plot_predictions( y_test_subset, y_pred_subset,fold, model_name,
-                f"{AGGREGATED_OUTDIR}/{model_name}_{fold}_ypreds_first10k_{timestamp}.png")
+                f"{AGGREGATED_OUTDIR}/{timestamp}_ypreds_diff_{model_name}_{fold}_first10k.png",
+                f"{AGGREGATED_OUTDIR}/{timestamp}_ypreds_hist_{model_name}_{fold}_first10k.png")
     else:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         plots.plot_predictions( y_test, y_pred,fold, model_name,
-                f"{AGGREGATED_OUTDIR}/{model_name}_{fold}_ypreds_{timestamp}.png")
-
+                f"{AGGREGATED_OUTDIR}/{timestamp}_ypreds_diff_{model_name}_{fold}.png",
+                f"{AGGREGATED_OUTDIR}/{timestamp}_ypreds_hist_{model_name}_{fold}.png")
+        
 def save_model_log_results(best_cv_perfs, best_params,best_eval_func,best_models_ensemble, model_name):
     print(f"Best Hyperparameters: {best_params}")
     print(f"Best {EVAL_FUNC_METRIC.upper()} across all folds: {best_eval_func:.4f}")
@@ -460,24 +482,22 @@ def reg_hyperparameter_tuning(X,y, device, model_name, do_cv=0):
     param_grid = {
         'hidden_dim': [
                     #    512, 
-                    1024,
-            # 512, 1024, 2048,
-                       10000,
+            512, 1024, 2048,4800
+                    #    1000,
                     #    20000
                        ],
         'dropout_rate': [
-            0.001,
-                        #  .005, .05, 0.1, 
-                        0,
+            0.001,0,
+                         .005, .05, 0.1, 
                          ],
         'lr': [
-            # .02,
-            # .01, .005, 
-            .0005, 
-               .0001],
-        'weight_decay': [0.0,
-                        #   0.01, 0.005
-                        .001,
+            .4,
+            .05, .005, 
+            .12, 
+              ],
+        'weight_decay': [
+                          0.001, 0.005
+                        0.01,0
                           ],
     }
     best_eval_func = -np.inf 

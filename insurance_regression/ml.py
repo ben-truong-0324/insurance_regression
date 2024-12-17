@@ -404,7 +404,7 @@ def evaluate_metrics_in_context(y_true, y_pred, model_name, file_path=f"{TXT_OUT
     # return mse, mae, r2, relative_mse, relative_mae
 
 def train_and_evaluate_svm(X_train, y_train, X_test, y_test):
-    kernels = ['linear', 'poly', 'rbf', 'sigmoid']
+    kernels = [ 'poly', 'rbf', 'sigmoid','linear']
     results = {}
 
     # Train and evaluate for each kernel
@@ -454,10 +454,10 @@ def train_and_evaluate_dt(X_train, y_train, X_test, y_test):
 
     # Initialize models
     dt = DecisionTreeRegressor(random_state=GT_ID)
-    boosting = GradientBoostingRegressor(n_estimators=N_ESTIMATOR, learning_rate=0.001, random_state=GT_ID)
+    boosting = GradientBoostingRegressor(n_estimators=N_ESTIMATOR, learning_rate=0.01, random_state=GT_ID)
     if any(X_train.dtypes == 'category'):
         xgboost_model = xgb.XGBRegressor(objective="reg:squarederror",random_state=GT_ID,enable_categorical=True,)
-    else: xgboost_model = xgb.XGBRegressor(objective="reg:squarederror",random_state=GT_ID,learning_rate=1, max_depth = 10)
+    else: xgboost_model = xgb.XGBRegressor(objective="reg:squarederror",random_state=GT_ID,learning_rate=.1, max_depth = 10)
     bagging = BaggingRegressor(estimator =xgboost_model, n_estimators=N_ESTIMATOR, random_state=GT_ID)
     rf = RandomForestRegressor(n_estimators=N_ESTIMATOR, random_state=GT_ID)
     extra_trees = ExtraTreesRegressor(n_estimators=N_ESTIMATOR, random_state=GT_ID)
@@ -488,11 +488,11 @@ def train_and_evaluate_dt(X_train, y_train, X_test, y_test):
     
     # Fit models
     models = {
-        "Default Decision Tree": dt,
-        # "Bagging": bagging,
+        # "Default Decision Tree": dt,
+        "Bagging": bagging,
         # "Boosting with Decision Tree": boosting,
         # "XGBoost": xgboost_model,
-        "XGBoost_class": xgb_class,
+        "XGBoostClass": xgb_class,
         # "Random Forest": rf,
         # "Extra Trees": extra_trees,
         # "Histogram-based Gradient Boosting": hist_gb,
@@ -506,20 +506,8 @@ def train_and_evaluate_dt(X_train, y_train, X_test, y_test):
     for model_name, model in models.items():
         print(model)
         start_time = time.time()
-        if "XGBoost_class" in model_name:
-            # bins = [0, 100, 400, 900, 1600, 2500, 3000, 4000,5000,np.inf]
-            # bin_labels = range(len(bins) - 1)
-            # binned_y_train = pd.cut(y_train, bins=bins, labels=bin_labels)
-
-            # bin_modes = {}
-            # for bin_label in bin_labels:
-            #     mode_value = y_train[binned_y_train == bin_label].mode()[0]  # Mode of original y_train in the bin
-            #     bin_modes[bin_label] = mode_value
-            # model.fit(X_train, binned_y_train)
-            # binned_y_pred = model.predict(X_test)
-            # y_pred = np.array([bin_modes[pred] for pred in binned_y_pred])
-            # Define bins and bin labels
-            bins = [0, 100, 400, 900, 1600, 2500, 3000, 4000, 5000, np.inf]
+        if "XGBoostClass" in model_name:
+            bins = [0, 50, 200, 900, 1600, 2500, 3000, 4000, 5000, np.inf]
             bin_labels = range(len(bins) - 1)
             binned_y_train = pd.cut(y_train, bins=bins, labels=bin_labels)
             bin_distributions = {}
@@ -538,60 +526,67 @@ def train_and_evaluate_dt(X_train, y_train, X_test, y_test):
 
         else:
             model.fit(X_train, y_train)
-            y_pred = model.predict(X_test)
+            y_pred = np.abs(model.predict(X_test))
 
 
-        if "XGBoost_class" in model_name:
+        if "XGBoostClass" in model_name:
             binned_y_test = pd.cut(y_test, bins=bins, labels=bin_labels)
             accuracy = accuracy_score(binned_y_test, binned_y_pred)
             print(f"Accuracy: {accuracy * 100:.2f}%")
             print("Classification Report:")
             print(classification_report(binned_y_test, binned_y_pred))
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            model_path = os.path.join(
+                MODELS_OUTDIR,
+                f"{model_name}_{timestamp}.joblib"
+            )
+            joblib.dump(model, model_path)
+            print(f"Model {model_name} saved at {model_path}")
         else:
             if np.any(np.isnan(y_test)):
                 print("Warning: NaN values found in y_test")
             if np.any(np.isnan(y_pred)):
                 print("Warning: NaN values found in y_pred")
 
-        mse = mean_squared_error(y_test, y_pred)
-        mae = mean_absolute_error(y_test, y_pred)
-        r2 = r2_score(y_test, y_pred)
-        rmse = np.sqrt(mean_squared_error(y_test, y_pred))
-        rmlse = np.sqrt(mean_squared_error(np.log1p(y_test), np.log1p(y_pred)))
-        model_params = model.get_params() if hasattr(model, 'get_params') else None
+            mse = mean_squared_error(y_test, y_pred)
+            mae = mean_absolute_error(y_test, y_pred)
+            r2 = r2_score(y_test, y_pred)
+            rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+            rmlse = np.sqrt(mean_squared_error(np.log1p(y_test), np.log1p(y_pred)))
+            model_params = model.get_params() if hasattr(model, 'get_params') else None
 
-        results[model_name] = {
-            "MSE": mse,
-            "MAE": mae,
-            "RMSE": rmse,
-            "RMLSE": rmlse,
-            "R2": r2,
-            "runtime": time.time() - start_time,
-            'params': model_params,
-        }
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        model_path = os.path.join(
-            MODELS_OUTDIR,
-            f"{model_name}_{timestamp}.joblib"
-        )
-        # joblib.dump(model, model_path)
-        # print(f"Model {model_name} saved at {model_path}")
-        log_entry = (
-            f"Model: {model_name}\n"
-            f"Saved Path: {model_path}\n"
-            f"Timestamp: {timestamp}\n"
-            f"MSE: {results[model_name]['MSE']:.4f}\n"
-            f"MAE: {results[model_name]['MAE']:.4f}\n"
-            f"RMSE: {results[model_name]['RMSE']:.4f}\n"
-            f"RMLSE: {results[model_name]['RMLSE']:.4f}\n"
-            f"R2: {results[model_name]['R2']:.4f}\n"
-            f"Runtime: {results[model_name]['runtime']:.2f} seconds\n"
-            f"Model Hyperparameters: {model_params}\n"  
-            f"{'#' * 50}\n"
-        )
-        # Append the log entry to the text file
-        with open(MODEL_ALL_LOG_FILE, "a") as log_file:
-            log_file.write(log_entry)
+            results[model_name] = {
+                "MSE": mse,
+                "MAE": mae,
+                "RMSE": rmse,
+                "RMLSE": rmlse,
+                "R2": r2,
+                "runtime": time.time() - start_time,
+                'params': model_params,
+            }
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            model_path = os.path.join(
+                MODELS_OUTDIR,
+                f"{model_name}_{timestamp}.joblib"
+            )
+            joblib.dump(model, model_path)
+            print(f"Model {model_name} saved at {model_path}")
+            log_entry = (
+                f"Model: {model_name}\n"
+                f"Saved Path: {model_path}\n"
+                f"Timestamp: {timestamp}\n"
+                f"MSE: {results[model_name]['MSE']:.4f}\n"
+                f"MAE: {results[model_name]['MAE']:.4f}\n"
+                f"RMSE: {results[model_name]['RMSE']:.4f}\n"
+                f"RMLSE: {results[model_name]['RMLSE']:.4f}\n"
+                f"R2: {results[model_name]['R2']:.4f}\n"
+                f"Runtime: {results[model_name]['runtime']:.2f} seconds\n"
+                f"Model Hyperparameters: {model_params}\n"  
+                f"{'#' * 50}\n"
+            )
+            # Append the log entry to the text file
+            with open(MODEL_ALL_LOG_FILE, "a") as log_file:
+                log_file.write(log_entry)
         ###############
         # evaluate_metrics_in_context(y_test, y_pred, model_name)
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -621,7 +616,7 @@ def train_and_evaluate_mpl(X,y):
     y = torch.FloatTensor(y)
     for model_name in EVAL_REG_MODELS:
         model_start_time = time.time()
-        best_cv_perfs, best_params,best_eval_func, best_models_ensemble = reg_hyperparameter_tuning(X,y, device, model_name,1)
+        best_cv_perfs, best_params,best_eval_func, best_models_ensemble = reg_hyperparameter_tuning(X,y, device, model_name,0)
         results[model_name] = {
             "MSE": best_cv_perfs['MSE'],  
             "MAE": best_cv_perfs['MAE'],  
@@ -721,7 +716,9 @@ def get_solutions(X_train):
             if not os.path.exists(result_file) and model_name not in inferred_models:
                 print(f"Loading individual model for {model_name}")
                 model = joblib.load(os.path.join(MODELS_OUTDIR, model_file))
+
                 predictions = model.predict(X_test)
+                
                 inferred_models.append(model_name)
                 inferred = True
             else:
@@ -742,8 +739,8 @@ def get_solutions(X_train):
 def main(): 
     np.random.seed(GT_ID)
   
-    do_skl_train = 1
-    do_torch_train = 0
+    do_skl_train = 0
+    do_torch_train = 1
     start_time = time.time()
     X,y,X_train, X_test, y_train, y_test  = check_etl()
     check_data_info(X, y, X_train, X_test, y_train, y_test, show = False)
@@ -759,8 +756,8 @@ def main():
         # if not os.path.exists(dt_result_save_file) or os.path.exists(dt_result_save_file):
         # brute_force_binning(X_train,y_train)
         # get_bayes_opt(X_train, y_train)
-        # results = train_and_evaluate_dt(X_train, y_train, X_test, y_test)
-        results = train_and_evaluate_svm(X_train, y_train, X_test, y_test)
+        results = train_and_evaluate_dt(X_train, y_train, X_test, y_test)
+        # results = train_and_evaluate_svm(X_train, y_train, X_test, y_test)
             # save_results(results, f"{Y_PRED_OUTDIR}/dt_results.pkl")
         
     ####### Torch models (just MPL for now)
@@ -771,7 +768,7 @@ def main():
             # save_results(results, f"{Y_PRED_OUTDIR}/mpl_results.pkl")
         
     ######## done training, now inference and derive solutions.csv
-    get_solutions(X_train)
+    # get_solutions(X_train)
     
 
 if __name__ == "__main__":
