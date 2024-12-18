@@ -294,7 +294,7 @@ def train_nn_early_stop_regression(X_train, y_train, X_test, y_test, device,para
         else:
             output_dim = len(np.unique(y_train.cpu()))
     max_epochs = 50
-    patience = 5
+    patience = 10
     # Create DataLoaders for training and testing
 
 
@@ -302,7 +302,7 @@ def train_nn_early_stop_regression(X_train, y_train, X_test, y_test, device,para
     train_dataset = TensorDataset(torch.FloatTensor(X_train), torch.FloatTensor(y_train))
     test_dataset = TensorDataset(torch.FloatTensor(X_test), torch.FloatTensor(y_test))
 
-    batch_size = params_dict.get('batch_size', 64)  # Default batch size if not specified
+    batch_size = params_dict.get('batch_size', 32)  # Default batch size if not specified
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
@@ -360,7 +360,6 @@ def train_nn_early_stop_regression(X_train, y_train, X_test, y_test, device,para
             train_loss.backward()
             optimizer.step()
             train_epoch_loss += train_loss.item() * len(batch_X)  # Accumulate loss
-            
            
         # Average train loss for the epoch
         train_epoch_loss /= len(train_loader.dataset)
@@ -509,14 +508,14 @@ def reg_hyperparameter_tuning(X,y, device, model_name, do_cv=0):
     # Define hyperparameter grid
     param_grid = {
         'hidden_dim': [
-            512, 
+            3000, 
              # 2048,4800, 1000, 20000
                        ],
         'dropout_rate': [
             0.001,
                          ],
         'lr': [
-            .005, 
+            .005,
               ],
         'weight_decay': [
                           0.005,

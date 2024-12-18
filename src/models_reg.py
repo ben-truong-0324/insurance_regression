@@ -56,7 +56,8 @@ class MLPRegression(nn.Module):
         self.fc4 = nn.Linear(hidden_dim // 4, output_dim)
 
     def forward(self, x):
-        x = torch.relu(self.fc1(x))
+        # x = torch.relu(self.fc1(x))
+        x = self.fc1(x)
         x = self.dropout(x)
         x = torch.relu(self.fc2(x))
         x = self.dropout(x)
