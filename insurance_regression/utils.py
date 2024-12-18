@@ -294,7 +294,7 @@ def train_nn_early_stop_regression(X_train, y_train, X_test, y_test, device,para
         else:
             output_dim = len(np.unique(y_train.cpu()))
     max_epochs = 50
-    patience = 6
+    patience = 5
     # Create DataLoaders for training and testing
 
 
@@ -307,12 +307,25 @@ def train_nn_early_stop_regression(X_train, y_train, X_test, y_test, device,para
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
     if model_name == "MPL":
-        model = MLPRegression(
-            input_dim,
-            output_dim,
-            hidden_dim=params_dict['hidden_dim'],
-            dropout_rate=params_dict['dropout_rate']
-        ).to(device)
+        model = MLPRegression(input_dim,output_dim,hidden_dim=params_dict['hidden_dim'],dropout_rate=params_dict['dropout_rate']).to(device)
+    elif model_name == "MPL1":
+        model = MLPRegression1(input_dim,output_dim,hidden_dim=params_dict['hidden_dim'],dropout_rate=params_dict['dropout_rate']).to(device)
+    elif model_name == "MPL2":
+        model = MLPRegression2(input_dim,output_dim,hidden_dim=params_dict['hidden_dim'],dropout_rate=params_dict['dropout_rate']).to(device)
+    elif model_name == "MPL3":
+        model = MLPRegression3(input_dim,output_dim,hidden_dim=params_dict['hidden_dim'],dropout_rate=params_dict['dropout_rate']).to(device)
+    elif model_name == "MPL4":
+        model = MLPRegression4(input_dim,output_dim,hidden_dim=params_dict['hidden_dim'],dropout_rate=params_dict['dropout_rate']).to(device)
+    elif model_name == "MPL5":
+        model = MLPRegression5(input_dim,output_dim,hidden_dim=params_dict['hidden_dim'],dropout_rate=params_dict['dropout_rate']).to(device)
+    elif model_name == "MPL6":
+        model = MLPRegression6(input_dim,output_dim,hidden_dim=params_dict['hidden_dim'],dropout_rate=params_dict['dropout_rate']).to(device)
+    elif model_name == "MPL7":
+        model = MLPRegression7(input_dim,output_dim,hidden_dim=params_dict['hidden_dim'],dropout_rate=params_dict['dropout_rate']).to(device)
+    elif model_name == "MPL8":
+        model = MLPRegression8(input_dim,output_dim,hidden_dim=params_dict['hidden_dim'],dropout_rate=params_dict['dropout_rate']).to(device)
+    elif model_name == "MPL9":
+        model = MLPRegression9(input_dim,output_dim,hidden_dim=params_dict['hidden_dim'],dropout_rate=params_dict['dropout_rate']).to(device)
     elif model_name == "LSTM":
         model = LSTMRegression(input_dim, output_dim, hidden_dim=params_dict['hidden_dim'], num_layers=1, dropout_rate=params_dict['dropout_rate']).to(device)
     elif model_name == "SalienceNN":
@@ -338,7 +351,12 @@ def train_nn_early_stop_regression(X_train, y_train, X_test, y_test, device,para
             batch_X, batch_y = batch_X.to(device), batch_y.to(device)
             optimizer.zero_grad()
             outputs_train = model(batch_X).squeeze()
-            train_loss = criterion(outputs_train, batch_y)
+
+            log_y_train = torch.log1p(batch_y)
+            log_outputs_train = torch.log1p(outputs_train)
+            train_loss = criterion(log_outputs_train, log_y_train)
+
+            # train_loss = criterion(outputs_train, batch_y)
             train_loss.backward()
             optimizer.step()
             train_epoch_loss += train_loss.item() * len(batch_X)  # Accumulate loss
@@ -354,7 +372,9 @@ def train_nn_early_stop_regression(X_train, y_train, X_test, y_test, device,para
             for batch_idx, (batch_X, batch_y) in enumerate(test_loader):
                 batch_X, batch_y = batch_X.to(device), batch_y.to(device)
                 outputs_eval = model(batch_X).squeeze()
-                eval_loss = criterion(outputs_eval, batch_y)
+                log_y_eval = torch.log1p(batch_y)
+                log_outputs_eval = torch.log1p(outputs_eval)
+                eval_loss = criterion(log_outputs_eval, log_y_eval)
                 eval_epoch_loss += eval_loss.item() * len(batch_X)
                 
                 
@@ -398,7 +418,7 @@ def train_nn_early_stop_regression(X_train, y_train, X_test, y_test, device,para
     outputs = torch.cat(outputs_list, dim=0).cpu().numpy()
     outputs = np.abs(outputs)
 
-    # Debugging outputs and y_test
+    print("#"*18)
     def debug_tensor_info(tensor, name):
         print(f"Debug info for {name}:")
         print(f"Shape: {tensor.shape}")
@@ -407,6 +427,9 @@ def train_nn_early_stop_regression(X_train, y_train, X_test, y_test, device,para
 
     debug_tensor_info(outputs, "outputs")
     debug_tensor_info(y_test, "y_test")
+    print(params_dict)
+    print(model)
+    
 
     # Fix negative values in outputs
     if (outputs < 0).any():
@@ -423,6 +446,11 @@ def train_nn_early_stop_regression(X_train, y_train, X_test, y_test, device,para
     rmse = np.sqrt(mse)
     rmlse = np.sqrt(mean_squared_error(np.log1p(y_test), np.log1p(outputs)))
     r2 = r2_score(y_test, outputs)
+    # print(f"Mean Squared Error (MSE): {mse}")
+    # print(f"RMLSE: {rmlse}")
+    # print(f"Mean Absolute Error (MAE): {mae}")
+    # print(f"R² Score: {r2}")
+    # print("#"*18)
     return mse, mae, rmse, r2,rmlse, runtime, model, epoch_losses, outputs
 
 def do_plot_preds_of_fold(y_test, y_pred, model_name, fold):
@@ -455,7 +483,7 @@ def save_model_log_results(best_cv_perfs, best_params,best_eval_func,best_models
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         model_path = os.path.join(
             MODELS_OUTDIR, 
-            f"{model_name}_fold_{idx + 1}_{timestamp}.joblib"
+            f"{timestamp}_{model_name}_fold_{idx + 1}_{best_eval_func:.4f}.joblib"
         )
         joblib.dump(model, model_path)
         print(f"Saved model for fold {idx + 1} at: {model_path}")
@@ -481,31 +509,25 @@ def reg_hyperparameter_tuning(X,y, device, model_name, do_cv=0):
     # Define hyperparameter grid
     param_grid = {
         'hidden_dim': [
-                    #    512, 
-            512, 1024, 2048,4800,
-                    #    1000,
-                    #    20000
+            512, 
+             # 2048,4800, 1000, 20000
                        ],
         'dropout_rate': [
-            0.001,0,
-                         .005, .05, 0.1, 
+            0.001,
                          ],
         'lr': [
-            .4,
-            .05, .005, 
-            .12, 
+            .005, 
               ],
         'weight_decay': [
-                          0.001, 0.005,
-                        0.01,0,
+                          0.005,
                           ],
     }
-    best_eval_func = -np.inf 
+    best_eval_func = 7
     best_params = None
     best_models_ensemble = None
     best_cv_perfs = None
     kf = KFold(n_splits=K_FOLD_CV, shuffle=True, random_state=GT_ID)
-
+    
     # Loop through hyperparameters
     for hidden_dim in param_grid['hidden_dim']:
         for dropout_rate in param_grid['dropout_rate']:
@@ -560,9 +582,12 @@ def reg_hyperparameter_tuning(X,y, device, model_name, do_cv=0):
                         "rmlse": avg_metrics_per_cv["RMLSE"],
                         "r2": avg_metrics_per_cv["R2"]
                     }.get(EVAL_FUNC_METRIC.lower(), avg_metrics_per_cv["MAE"])  # Default to MAE if metric is undefined
+                    print(f"{EVAL_FUNC_METRIC}: {eval_metric_value:.4f}")
+
+                    print(f"{model_name} with {params_dict}")
 
                     # Compare overall performance to global best
-                    if eval_metric_value > best_eval_func:
+                    if eval_metric_value < best_eval_func:
                         print(f"New global best model found for {EVAL_FUNC_METRIC}: {eval_metric_value:.4f}")
                         best_eval_func = eval_metric_value
                         best_params = params_dict

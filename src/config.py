@@ -27,7 +27,11 @@ FARSIGHT_MODELS = [
                     ]
 
 EVAL_REG_MODELS = [
-    'MPL',
+    'MPL', 'MPL1',
+    #  'MPL2', 'MPL3', 'MPL4', 
+    # 'MPL5',
+    # 'MPL6','MPL7',
+    # 'MPL8','MPL9',
     # 'LSTM', 
     # 'CNN',
     # 'SalienceNN',

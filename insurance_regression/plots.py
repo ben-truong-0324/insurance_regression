@@ -19,6 +19,7 @@ from sklearn.random_projection import GaussianRandomProjection
 from xgboost import XGBRegressor
 from xgboost import XGBClassifier
 
+import math
 
 from sklearn.inspection import permutation_importance
 from sklearn.metrics import accuracy_score, f1_score, log_loss
@@ -1901,3 +1902,126 @@ def analyze_dim_reduc(X_train,y_train,X_test, y_test):
     # print(results)
     print(f"Dimension Reduction plot saved at: {save_path}")
     # plt.show()
+
+def scatter_plots_with_dynamic_rows(data, feature_columns, target_col, cols=5):
+    """
+    Create scatter plots of features vs target in subplots with dynamic rows.
+    
+    Args:
+        data (pd.DataFrame): DataFrame containing the data.
+        feature_columns (list): List of feature column names.
+        target_col (str): Target column name.
+        cols (int): Number of columns in the subplot grid.
+    """
+    num_features = len(feature_columns)
+    rows = math.ceil(num_features / cols)  # Dynamically calculate rows
+    
+    fig, axes = plt.subplots(rows, cols, figsize=(5 * cols, 4 * rows))  # Adjust figure size dynamically
+    axes = axes.flatten()
+    
+    for idx, feature in enumerate(feature_columns):
+        ax = axes[idx]
+        sns.scatterplot(data=data, x=feature, y=target_col, alpha=0.6, ax=ax)
+        ax.set_title(f"{feature} vs {target_col}", fontsize=10)
+        ax.set_xlabel(feature, fontsize=8)
+        ax.set_ylabel(target_col, fontsize=8)
+    
+    # Turn off remaining empty subplots
+    for idx in range(len(feature_columns), len(axes)):
+        axes[idx].axis("off")
+    
+    plt.tight_layout()
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    save_path = f"{OUTPUT_DIR_RAW_DATA_A3}/{timestamp}_feature_x_target_scatterplot.png"
+    plt.savefig(save_path)
+    plt.close()  
+    print(f"Plot saved at: {save_path}")
+
+def compute_bin_statistics(data, feature_columns, target_range_col, statistic='mean'):
+    """
+    Compute median/mean and standard deviation across bins for each feature.
+    """
+    assert statistic in ['mean', 'median'], "Statistic must be 'mean' or 'median'"
+
+    bin_stats = {}
+    for feature in feature_columns:
+        if statistic == 'mean':
+            bin_values = data.groupby(target_range_col)[feature].mean()
+        elif statistic == 'median':
+            bin_values = data.groupby(target_range_col)[feature].median()
+        
+        bin_std = bin_values.std()  # Compute std across bin medians/means
+        bin_stats[feature] = {'bin_values': bin_values, 'bin_std': bin_std}
+    
+    return bin_stats
+
+def visualize_feature_bin_statistics(data, feature_columns, target_col, statistic='mean',cols=5):
+    """
+    Visualize median/average by bins and standard deviation of values across bins.
+    """
+    import matplotlib.pyplot as plt
+    
+    # Create target bins
+    data["target_range"] = pd.cut(
+        data[target_col],
+        bins=[0, 100, 300, 500, 800, 1000, 1300, 1800, 2200, 3000, 4000, 5000],
+        labels=["<100", "100-300", "300-500", "500-800", "800-1000", "1000-1300", 
+                "1300-1800", "1800-2200", "2200-3000", "3000-4000", "4000-5000"]
+    )
+    
+    # Compute statistics
+    bin_stats = compute_bin_statistics(data, feature_columns, "target_range", statistic)
+    
+    # # Plot median/average by bin for each feature
+    # for feature in feature_columns:
+    #     bin_values = bin_stats[feature]['bin_values']
+    #     bin_std = bin_stats[feature]['bin_std']
+        
+    #     plt.figure(figsize=(10, 6))
+    #     bin_values.plot(kind='bar', color='skyblue', alpha=0.8)
+    #     plt.axhline(y=bin_values.mean(), color='red', linestyle='--', label='Overall Mean')
+    #     plt.title(f"{statistic.capitalize()} of {feature} by Target Bins (Std: {bin_std:.4f})")
+    #     plt.xlabel("Target Range")
+    #     plt.ylabel(f"{statistic.capitalize()} Value")
+    #     plt.legend()
+    #     plt.grid(axis='y', linestyle='--', alpha=0.6)
+    #     plt.show()
+
+    #     print(f"Feature: {feature}")
+    #     print(f"Bin {statistic} values:")
+    #     print(bin_values)
+    #     print(f"Std of {statistic} values across bins: {bin_std:.4f}\n")
+    # Determine number of rows
+    num_features = len(feature_columns)
+    rows = math.ceil(num_features / cols)  # Calculate rows dynamically
+    
+    # Create subplots
+    fig, axes = plt.subplots(rows, cols, figsize=(5 * cols, 4 * rows))
+    axes = axes.flatten()
+    
+    for idx, feature in enumerate(feature_columns):
+        ax = axes[idx]
+        
+        # Get bin statistics
+        bin_values = bin_stats[feature]['bin_values']
+        bin_std = bin_stats[feature]['bin_std']
+        
+        # Plot the bar chart
+        bin_values.plot(kind='bar', color='skyblue', alpha=0.8, ax=ax)
+        ax.axhline(y=bin_values.mean(), color='red', linestyle='--', label='Overall Mean')
+        ax.set_title(f"{feature} (Std: {bin_std:.4f})", fontsize=10)
+        ax.set_xlabel("Target Range", fontsize=8)
+        ax.set_ylabel(f"{statistic.capitalize()} Value", fontsize=8)
+        ax.legend(fontsize=8)
+        ax.grid(axis='y', linestyle='--', alpha=0.6)
+    
+    # Turn off empty axes
+    for idx in range(num_features, len(axes)):
+        axes[idx].axis("off")
+    
+    plt.tight_layout()
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    save_path = f"{OUTPUT_DIR_RAW_DATA_A3}/{timestamp}_feature_x_target_binned_stats.png"
+    plt.savefig(save_path)
+    plt.close()  
+    print(f"Plot saved at: {save_path}")

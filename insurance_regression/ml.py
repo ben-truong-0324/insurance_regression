@@ -85,6 +85,7 @@ def train_nn_with_early_stopping_with_param(X_train, y_train, X_test, y_test, pa
         model = SimpleNN(input_dim, output_dim, hidden_layers, dropout_rate=dropout_rate).to(device)
     elif model_name == "MPL":
         model = FarsightMPL(input_dim=input_dim, output_dim=output_dim).to(device)
+
     elif model_name == "CNN":
         model = FarsightCNN(input_dim=input_dim, output_dim=output_dim,hidden_dim=289, feature_maps=19, dropout_rate=params['dropout_rate']).to(device)
 
@@ -491,8 +492,8 @@ def train_and_evaluate_dt(X_train, y_train, X_test, y_test):
         # "Default Decision Tree": dt,
         "Bagging": bagging,
         # "Boosting with Decision Tree": boosting,
-        # "XGBoost": xgboost_model,
-        "XGBoostClass": xgb_class,
+        "XGBoost": xgboost_model,
+        # "XGBoostClass": xgb_class,
         # "Random Forest": rf,
         # "Extra Trees": extra_trees,
         # "Histogram-based Gradient Boosting": hist_gb,
@@ -570,6 +571,11 @@ def train_and_evaluate_dt(X_train, y_train, X_test, y_test):
                 f"{model_name}_{timestamp}.joblib"
             )
             joblib.dump(model, model_path)
+            print(f"Mean Squared Error (MSE): {mse}")
+            print(f"RMLSE: {rmlse}")
+            print(f"Mean Absolute Error (MAE): {mae}")
+            print(f"R² Score: {r2}")
+            print("#"*18)
             print(f"Model {model_name} saved at {model_path}")
             log_entry = (
                 f"Model: {model_name}\n"
@@ -615,6 +621,8 @@ def train_and_evaluate_mpl(X,y):
     X = torch.FloatTensor(X.values)
     y = torch.FloatTensor(y)
     for model_name in EVAL_REG_MODELS:
+        print("#"*30)
+        print(model_name)
         model_start_time = time.time()
         best_cv_perfs, best_params,best_eval_func, best_models_ensemble = reg_hyperparameter_tuning(X,y, device, model_name,0)
         results[model_name] = {
@@ -635,28 +643,45 @@ def save_results(results,filename ):
         pickle.dump(results, f)
     print(f"Results saved to {filename}")
 
-def check_etl():
-    X, y = etl.get_data()
+def visualize_feature_target_relationships(data, feature_columns, target_col):
+    
+    plots.scatter_plots_with_dynamic_rows(
+        data=data, 
+        feature_columns=feature_columns, 
+        target_col="y_train", 
+        cols=5, #number of subplot col in graph
+    )
+    
+    # Visualize median/average by bins
+    plots.visualize_feature_bin_statistics(
+        data=data, 
+        feature_columns=feature_columns, 
+        target_col="y_train", 
+        statistic='mean'  # Change to 'median' if desired
+    )
+    plots.visualize_feature_bin_statistics(
+        data=data, 
+        feature_columns=feature_columns, 
+        target_col="y_train", 
+        statistic='median'  # Change to 'median' if desired
+    )
+
+def check_etl(do_graphs = 0):
+    X,y = etl.get_data()
+   
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=.1, random_state=GT_ID)
     test_data_etl_input_check(X,y,X_train, X_test, y_train, y_test, show = True)
     ####
-    # timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    # plots.plot_pca(X,y, f"{AGGREGATED_OUTDIR}/{timestamp}_pca.png" )
-    # plots.plot_ica(X,y, f"{AGGREGATED_OUTDIR}/{timestamp}_ica.png" )
-    # etl.graph_raw_data(X_test, y_test)
-    # plots.analyze_feature_importance(X_train, y_train, f"")
-
-    # bin_edges = [0, 200, 400, 900, 1200, 1600, 2000, 2500, 3000, np.inf]
-    # bin_labels = pd.cut(y_train, bins=bin_edges, labels=False, right=False)  
-    # for bin_index in range(len(bin_edges) - 1):  #
-    #     bin_mask = (bin_labels == bin_index)  
-    #     X_train_bin = X_train[bin_mask]
-    #     y_train_bin = y_train[bin_mask]
-    #     if X_train_bin.shape[0] == 0:
-    #         continue
-    #     print(f"Analyzing bin {bin_index} with {X_train_bin.shape[0]} samples")
-    #     plots.analyze_feature_importance(X_train_bin, y_train_bin, f"_bin_{bin_index}")
-    # plots.analyze_dim_reduc(X_train,y_train,X_test, y_test)
+    if do_graphs:
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        plots.plot_pca(X,y, f"{AGGREGATED_OUTDIR}/{timestamp}_pca_etl{ETL_VERSION}.png" )
+        plots.plot_ica(X,y, f"{AGGREGATED_OUTDIR}/{timestamp}_ica_etl{ETL_VERSION}.png" )
+        etl.graph_raw_data(X_test, y_test)
+        plots.analyze_feature_importance(X_train, y_train, f"")
+        data_train = pd.DataFrame(X_train, columns=X.columns)
+        data_train["y_train"] = y_train
+        visualize_feature_target_relationships(data_train, feature_columns=X.columns, target_col="y_train")
+    check_data_info(X, y, X_train, X_test, y_train, y_test, show = False)
     
     print("======> Data verification complete")
     return X,y,X_train, X_test, y_train, y_test 
@@ -735,40 +760,32 @@ def get_solutions(X_train):
             
             results_df.to_csv(result_file, index=False)
             print(f"Predictions for {model_name} saved in {result_file}")
+
+
+    
 ###############
-def main(): 
-    np.random.seed(GT_ID)
-  
+def main():
+    do_etl_graphs = 0
     do_skl_train = 0
     do_torch_train = 1
+    do_solutions = 0
+    
     start_time = time.time()
-    X,y,X_train, X_test, y_train, y_test  = check_etl()
-    check_data_info(X, y, X_train, X_test, y_train, y_test, show = False)
+    X,y,X_train, X_test, y_train, y_test  = check_etl(do_etl_graphs)
     print(f"Time to load data: {time.time() - start_time}s")
 
-    ###### Sklearn models (just DT for now)
-    print("hello")
     if do_skl_train:
         print("starting skl models")
-        # y_train = pd.cut(y_train, bins=[0, 300,500, 1000,1300, 2000, 3000, np.inf], labels=[0, 1, 2, 3, 4,5,6])
-        # y_test = pd.cut(y_test, bins=[0, 300,500, 1000,1300, 2000, 3000, np.inf], labels=[0, 1, 2, 3, 4,5,6])
-        # dt_result_save_file = f"{Y_PRED_OUTDIR}/dt_results.pkl"
-        # if not os.path.exists(dt_result_save_file) or os.path.exists(dt_result_save_file):
         # brute_force_binning(X_train,y_train)
         # get_bayes_opt(X_train, y_train)
         results = train_and_evaluate_dt(X_train, y_train, X_test, y_test)
         # results = train_and_evaluate_svm(X_train, y_train, X_test, y_test)
-            # save_results(results, f"{Y_PRED_OUTDIR}/dt_results.pkl")
         
-    ####### Torch models (just MPL for now)
     if do_torch_train:
-        # mpl_result_save_file = f"{Y_PRED_OUTDIR}/mpl_results.pkl"
-        # if not os.path.exists(mpl_result_save_file) or os.path.exists(mpl_result_save_file):
         results = train_and_evaluate_mpl(X,y)
-            # save_results(results, f"{Y_PRED_OUTDIR}/mpl_results.pkl")
         
-    ######## done training, now inference and derive solutions.csv
-    # get_solutions(X_train)
+    if do_solutions:
+        get_solutions(X_train)
     
 
 if __name__ == "__main__":
@@ -780,7 +797,8 @@ if __name__ == "__main__":
     else:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Torch will be running on {device}")
+    np.random.seed(GT_ID)
     ####################
-    # etl.prelim_view()
+    # etl.prelim_view(TRAIN_PATH)
     main()
     

@@ -13,10 +13,15 @@ import os
 # CALENDAR_PATH = os.path.join(os.getcwd(), 'data', 'calendar.csv')
 # INVENTORY_PATH = os.path.join(os.getcwd(), 'data', 'inventory.csv')
 TRAIN_PATH = os.path.join(os.getcwd(), 'data', 'train.csv')
-PROCESSED_TRAIN_PATH = os.path.join(os.getcwd(), 'data', 'train_processed.csv')
 
 TEST_PATH = os.path.join(os.getcwd(), 'data', 'test.csv')
-PROCESSED_TEST_PATH = os.path.join(os.getcwd(), 'data', 'test_processed.csv')
+
+# Global ETL Version
+ETL_VERSION = 'v2'  
+
+# Define paths for processed datasets based on ETL_version
+PROCESSED_TRAIN_PATH = os.path.join(os.getcwd(), 'data', f'train_processed_{ETL_VERSION}.csv')
+PROCESSED_TEST_PATH = os.path.join(os.getcwd(), 'data', f'test_processed_{ETL_VERSION}.csv')
 
 
 
@@ -57,15 +62,15 @@ project_root = Path(__file__).resolve().parent.parent
 OUTPUT_DIR_A3 = project_root / 'outputs' / DATASET_SELECTION
 DRAFT_VER_A3 = 1
 # Set the directories using set_output_dir
-AGGREGATED_OUTDIR = set_output_dir(OUTPUT_DIR_A3 / f'ver{DRAFT_VER_A3}_{EVAL_FUNC_METRIC}/aggregated_graphs')
-Y_PRED_OUTDIR = set_output_dir(OUTPUT_DIR_A3 / f'ver{DRAFT_VER_A3}_{EVAL_FUNC_METRIC}/y_pred_graphs')
-CV_LOSSES_PKL_OUTDIR = set_output_dir(OUTPUT_DIR_A3 / f'ver{DRAFT_VER_A3}_{EVAL_FUNC_METRIC}/pkl_cv')
-PERFM_PKL_OUTDIR = set_output_dir(OUTPUT_DIR_A3 / f'ver{DRAFT_VER_A3}_{EVAL_FUNC_METRIC}/perf_pkl')
-MODELS_OUTDIR = set_output_dir(OUTPUT_DIR_A3 / f'ver{DRAFT_VER_A3}_{EVAL_FUNC_METRIC}/saved_models')
-LABEL_ENCODERS_PKL_OUTDIR = set_output_dir(OUTPUT_DIR_A3 / f'ver{DRAFT_VER_A3}_{EVAL_FUNC_METRIC}/label_encoders')
-SOLUTIONS_OUTDIR = set_output_dir(OUTPUT_DIR_A3 / f'ver{DRAFT_VER_A3}_{EVAL_FUNC_METRIC}/solutions')
-TXT_OUTDIR = set_output_dir(OUTPUT_DIR_A3 / f'ver{DRAFT_VER_A3}_{EVAL_FUNC_METRIC}/txt_stats')
-OUTPUT_DIR_RAW_DATA_A3 =set_output_dir(OUTPUT_DIR_A3 / f'ver{DRAFT_VER_A3}_{EVAL_FUNC_METRIC}/raw_data_assessments')
+AGGREGATED_OUTDIR = set_output_dir(OUTPUT_DIR_A3 / f'ver{DRAFT_VER_A3}_{EVAL_FUNC_METRIC}_etl{ETL_VERSION}/aggregated_graphs')
+Y_PRED_OUTDIR = set_output_dir(OUTPUT_DIR_A3 / f'ver{DRAFT_VER_A3}_{EVAL_FUNC_METRIC}_etl{ETL_VERSION}/y_pred_graphs')
+CV_LOSSES_PKL_OUTDIR = set_output_dir(OUTPUT_DIR_A3 / f'ver{DRAFT_VER_A3}_{EVAL_FUNC_METRIC}_etl{ETL_VERSION}/pkl_cv')
+PERFM_PKL_OUTDIR = set_output_dir(OUTPUT_DIR_A3 / f'ver{DRAFT_VER_A3}_{EVAL_FUNC_METRIC}_etl{ETL_VERSION}/perf_pkl')
+MODELS_OUTDIR = set_output_dir(OUTPUT_DIR_A3 / f'ver{DRAFT_VER_A3}_{EVAL_FUNC_METRIC}_etl{ETL_VERSION}/saved_models')
+LABEL_ENCODERS_PKL_OUTDIR = set_output_dir(OUTPUT_DIR_A3 / f'ver{DRAFT_VER_A3}_{EVAL_FUNC_METRIC}_etl{ETL_VERSION}/label_encoders')
+SOLUTIONS_OUTDIR = set_output_dir(OUTPUT_DIR_A3 / f'ver{DRAFT_VER_A3}_{EVAL_FUNC_METRIC}_etl{ETL_VERSION}/solutions')
+TXT_OUTDIR = set_output_dir(OUTPUT_DIR_A3 / f'ver{DRAFT_VER_A3}_{EVAL_FUNC_METRIC}_etl{ETL_VERSION}/txt_stats')
+OUTPUT_DIR_RAW_DATA_A3 =set_output_dir(OUTPUT_DIR_A3 / f'ver{DRAFT_VER_A3}_{EVAL_FUNC_METRIC}_etl{ETL_VERSION}/raw_data_assessments')
 
 MODEL_ALL_LOG_FILE = os.path.join(os.getcwd(), TXT_OUTDIR, 'all_models_logs.txt')
 
