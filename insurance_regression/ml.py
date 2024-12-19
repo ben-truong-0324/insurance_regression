@@ -549,6 +549,8 @@ def train_and_evaluate_dt(X_train, y_train, X_test, y_test):
             if np.any(np.isnan(y_pred)):
                 print("Warning: NaN values found in y_pred")
 
+            y_pred = np.maximum(0, y_pred)
+
             mse = mean_squared_error(y_test, y_pred)
             mae = mean_absolute_error(y_test, y_pred)
             r2 = r2_score(y_test, y_pred)
@@ -766,8 +768,8 @@ def get_solutions(X_train):
 ###############
 def main():
     do_etl_graphs = 0
-    do_skl_train = 0
-    do_torch_train = 1
+    do_skl_train = 1
+    do_torch_train = 0
     do_solutions = 0
     
     start_time = time.time()
@@ -778,7 +780,8 @@ def main():
         print("starting skl models")
         # brute_force_binning(X_train,y_train)
         # get_bayes_opt(X_train, y_train)
-        results = train_and_evaluate_dt(X_train, y_train, X_test, y_test)
+        do_xgb_rmsle(X_train, y_train,X_test, y_test)
+        # results = train_and_evaluate_dt(X_train, y_train, X_test, y_test)
         # results = train_and_evaluate_svm(X_train, y_train, X_test, y_test)
         
     if do_torch_train:

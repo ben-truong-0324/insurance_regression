@@ -17,7 +17,7 @@ from src.models_reg import *
 from insurance_regression.config import *
 import insurance_regression.plots as plots
 from sklearn.model_selection import RandomizedSearchCV, StratifiedKFold
-
+from sklearn.model_selection import GridSearchCV, train_test_split
 import joblib
 import optuna
 
@@ -293,8 +293,8 @@ def train_nn_early_stop_regression(X_train, y_train, X_test, y_test, device,para
             output_dim = y_train.shape[1]  # Number of labels
         else:
             output_dim = len(np.unique(y_train.cpu()))
-    max_epochs = 50
-    patience = 10
+    max_epochs = 100
+    patience = 20
     # Create DataLoaders for training and testing
 
 
@@ -769,3 +769,91 @@ def get_bayes_opt(X_train, y_train):
     # Best results
     print("Best Params:", study.best_params)
     print("Best Accuracy:", study.best_value)
+
+
+
+import xgboost as xgb
+from sklearn.metrics import mean_squared_log_error
+from sklearn.model_selection import GridSearchCV, train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import make_scorer
+# 1. Define the RMLSE evaluation function
+
+def get_rmlse(y_true, y_pred):
+    return np.sqrt(mean_squared_log_error(y_true, np.maximum(0, y_pred)))
+    
+
+def custom_rmlse(y_pred, dtrain):
+    y_true = dtrain.get_label()
+    loss = get_rmlse(y_true, y_pred)
+    return 'rmlse', loss
+
+def custom_rmlse_sklearn(y_true, y_pred):
+    """Wrap custom_rmlse to be compatible with scikit-learn scoring."""
+    y_pred = np.maximum(0, y_pred)  # Ensure predictions are non-negative
+    return np.sqrt(mean_squared_log_error(np.log1p(y_true),  np.log1p(y_pred)))
+
+# Create a scorer object for GridSearchCV
+
+
+def do_xgb_rmsle(X_train, y_train,X_test, y_test, n_estimators=5):
+    # 3. Define XGBoost parameters
+    xgb_reg = xgb.XGBRegressor(objective='reg:squarederror', eval_metric='rmse', verbosity=1)
+    rmlse_scorer = make_scorer(custom_rmlse_sklearn, greater_is_better=False)
+
+    param_grid = {
+        'eta': [0.01, 0.05, 0.1],
+        'max_depth': [3, 5, 7],
+        'min_child_weight': [3, 5, 10],
+        'subsample': [0.5, 0.7, 0.8],
+        'colsample_bytree': [0.6, 0.8, 1.0],
+        'lambda': [1.0, 5.0, 10.0],
+        'alpha': [0.1, 1.0, 5.0],
+    }
+
+    # 4. Grid Search for Hyperparameter Optimization
+    grid_search = GridSearchCV(
+        estimator=xgb_reg,
+        param_grid=param_grid,
+        # scoring='neg_mean_squared_log_error',  # RMLSE as the objective
+        scoring=rmlse_scorer,
+        cv=5,
+        verbose=1,
+        n_jobs=-1
+    )
+
+    grid_search.fit(X_train, y_train)
+    best_params = grid_search.best_params_
+    print(f"Best parameters: {best_params}")
+
+    # 5. Train the final model with the best parameters
+    final_model = xgb.XGBRegressor(
+        objective='reg:squarederror',
+        **best_params
+    )
+
+    final_model.fit(X_train, y_train, )
+
+    # 6. Evaluate the model
+    y_pred = final_model.predict(X_test)
+    print(y_pred)
+    print(y_test)
+    test_rmlse = get_rmlse(y_test, y_pred)
+    print(f"Test RMLSE: {test_rmlse}")
+
+    mse = mean_squared_error(y_test, y_pred)
+    mae = mean_absolute_error(y_test, y_pred)
+    r2 = r2_score(y_test, y_pred)
+    rmlse = np.sqrt(mean_squared_error(np.log1p(y_test), np.log1p(y_pred)))
+    print(f"Mean Squared Error (MSE): {mse}")
+    print(f"RMLSE: {rmlse}")
+    print(f"Mean Absolute Error (MAE): {mae}")
+    print(f"R² Score: {r2}")
+    print("#"*18)
+
+    # timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    # model_path = os.path.join(
+    #     MODELS_OUTDIR,
+    #     f"xgbgrid_{timestamp}.joblib"
+    # )
+    # joblib.dump(final_model, model_path)
